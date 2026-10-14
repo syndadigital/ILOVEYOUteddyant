@@ -1,0 +1,246 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Heart Message</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono&display=swap">
+<style>
+/* Layout: white page; heart of small black words beside (or above, on phones) the TEDDYANT picture */
+:root {
+  --bg: #ffffff;
+  --ink: #0a0a0a;
+  --muted: #6b6b6b;
+  --line: rgba(10, 10, 10, 0.18);
+  --font-text: "Bebas Neue", "Impact", "Arial Narrow", sans-serif;
+  --font-mono: "Space Mono", "Courier New", monospace;
+  color-scheme: light;
+}
+body { background: var(--bg); color: var(--ink); }
+.wrap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px 16px 32px;
+  box-sizing: border-box;
+}
+.scene {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  --h: min(calc(100vh - 110px), 680px);
+}
+.heart {
+  position: relative;
+  width: min(calc(100% - 26vw), calc(var(--h) / 0.95));
+  aspect-ratio: 1 / 0.95;
+  min-width: 0;
+}
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.photo {
+  height: var(--h);
+  max-height: calc(var(--h));
+  width: auto;
+  max-width: 34vw;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 18px rgba(0, 0, 0, 0.12));
+  transform-origin: 50% 100%;
+  opacity: 0;
+}
+.photo.show {
+  animation: strut 1.6s cubic-bezier(.2,.9,.3,1.15) forwards, sway 4.5s ease-in-out 1.6s infinite;
+}
+@keyframes strut {
+  from { opacity: 0; transform: translateX(60px) scale(.92); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sway {
+  0%, 100% { opacity: 1; transform: rotate(0deg) scale(1); }
+  50% { opacity: 1; transform: rotate(-1.6deg) scale(1.015); }
+}
+/* phones: heart on top, figure stands below */
+@media (max-width: 640px) {
+  .scene { flex-direction: column; align-items: center; }
+  .heart { width: 100%; }
+  .photo { height: 46vh; max-width: 80vw; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo.show { animation: none; opacity: 1; }
+}
+.replay {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: color .2s, border-color .2s;
+}
+.replay:hover, .replay:focus-visible { color: var(--ink); border-color: var(--ink); outline: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+
+<div class="wrap">
+  <div class="scene">
+    <div class="heart">
+      <canvas id="c"></canvas>
+      <p class="sr">A heart made of the words "I wanna fuck you" repeated many times.</p>
+    </div>
+    <img class="photo" id="photo" src="teddyant-stand.png" alt="TEDDYANT">
+  </div>
+  <button class="replay" id="replay" type="button">PLAY AGAIN</button>
+</div>
+
+<script>
+const TEXT = "I WANNA FUCK YOU";
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const photo = document.getElementById('photo');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FONT = px => `${px}px "Bebas Neue", Impact, "Arial Narrow", sans-serif`;
+let W, H, items = [], t0, raf, fontPx, finish, shown;
+const OUTLINE_MS = 5000;   // outline words appear slowly around the heart
+const FILL_MS = 12000;     // then the inside fills, bottom to top
+const FADE = 1100;         // each word's own fade-in
+
+function heartPt(t) {
+  return {
+    x: 16 * Math.pow(Math.sin(t), 3),
+    y: -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t))
+  };
+}
+
+function layout() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = canvas.clientWidth; H = canvas.clientHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const box = Math.min(W * 0.94, H * 0.98);
+  const s = box / 34;
+  const cx = W / 2, cy = H / 2 + s * 1.5;
+  fontPx = Math.max(8, Math.round(box / 46));
+  ctx.font = FONT(fontPx);
+  const tw = ctx.measureText(TEXT).width;
+  const half = fontPx * 0.36;
+  items = [];
+
+  const placed = [];
+  const boxOf = (x, y, ang) => {
+    const c = Math.cos(ang), sn = Math.sin(ang), hw = tw / 2 + fontPx * 0.18, hh = half + fontPx * 0.12;
+    return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([a, b]) => ({ x: x + a * c - b * sn, y: y + a * sn + b * c }));
+  };
+  const axesOf = q => [0, 1].map(i => { const a = q[i], b = q[i + 1]; const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy); return { x: -dy / l, y: dx / l }; });
+  const overlap = (A, B) => {
+    for (const ax of [...axesOf(A), ...axesOf(B)]) {
+      const pa = A.map(p => p.x * ax.x + p.y * ax.y), pb = B.map(p => p.x * ax.x + p.y * ax.y);
+      if (Math.max(...pa) < Math.min(...pb) || Math.max(...pb) < Math.min(...pa)) return false;
+    }
+    return true;
+  };
+  const tryPlace = (x, y, ang) => {
+    const q = boxOf(x, y, ang);
+    for (const o of placed) if (Math.abs(o.cx - x) < tw * 1.2 && Math.abs(o.cy - y) < tw * 1.2 && overlap(q, o.q)) return false;
+    placed.push({ q, cx: x, cy: y });
+    return true;
+  };
+
+  const poly = [];
+  for (let i = 0; i < 900; i++) {
+    const p = heartPt(i / 900 * Math.PI * 2);
+    poly.push({ x: cx + p.x * s, y: cy + p.y * s });
+  }
+  const inPoly = (x, y) => {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j];
+      if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) c = !c;
+    }
+    return c;
+  };
+
+  const lens = [0];
+  for (let i = 1; i < poly.length; i++) lens.push(lens[i - 1] + Math.hypot(poly[i].x - poly[i - 1].x, poly[i].y - poly[i - 1].y));
+  const total = lens[lens.length - 1];
+  const at = d => {
+    let i = lens.findIndex(l => l >= d); if (i < 1) i = 1;
+    const a = poly[i - 1], b = poly[i];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
+  const outline = [];
+  let d = fontPx;
+  while (d < total - fontPx) {
+    const a = at(d), b = at(Math.min(d + tw, total));
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    let ang = Math.atan2(b.y - a.y, b.x - a.x);
+    if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
+    if (tryPlace(mx, my, ang)) { outline.push({ x: mx, y: my, ang }); d += tw + fontPx * 0.6; }
+    else d += fontPx * 0.4;
+  }
+  outline.forEach((it, k) => { it.at = (k / outline.length) * OUTLINE_MS; items.push(it); });
+
+  const rowH = fontPx * 1.2;
+  const gap = fontPx * 0.5;
+  const fill = [];
+  let row = 0;
+  for (let y = cy - 17 * s; y <= cy + 18 * s; y += rowH, row++) {
+    const off = (row % 2) * (tw + gap) / 2;
+    for (let x = cx - box / 2 - tw + off; x <= cx + box / 2; x += tw + gap) {
+      const M = x + tw / 2;
+      if (boxOf(M, y, 0).every(p => inPoly(p.x, p.y)) && tryPlace(M, y, 0)) fill.push({ x: M, y, ang: 0 });
+    }
+  }
+  fill.sort((a, b) => (b.y - a.y) + (Math.random() - .5) * rowH * 3);
+  fill.forEach((it, i) => { it.at = OUTLINE_MS + (i / fill.length) * FILL_MS; items.push(it); });
+  finish = OUTLINE_MS + FILL_MS + FADE;
+}
+
+function draw(el) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.font = FONT(fontPx);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#0a0a0a';
+  const beat = el > finish ? 1 + 0.022 * Math.pow(Math.max(0, Math.sin((el - finish) / 260)), 8) : 1;
+  ctx.save();
+  ctx.translate(W / 2, H / 2); ctx.scale(beat, beat); ctx.translate(-W / 2, -H / 2);
+  for (const it of items) {
+    const p = Math.min(Math.max((el - it.at) / FADE, 0), 1);
+    if (p <= 0) continue;
+    const e = 1 - Math.pow(1 - p, 3);
+    ctx.globalAlpha = e;
+    ctx.save();
+    ctx.translate(it.x, it.y + (1 - e) * 10);
+    ctx.rotate(it.ang);
+    ctx.fillText(TEXT, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function frame(now) { draw(now - t0); raf = requestAnimationFrame(frame); }
+
+function start() {
+  cancelAnimationFrame(raf);
+  photo.classList.remove('show');
+  void photo.offsetWidth;            // restart the entrance on replay
+  photo.classList.add('show');
+  layout();
+  if (reduce) { draw(finish + 1); return; }
+  t0 = performance.now();
+  raf = requestAnimationFrame(frame);
+}
+
+let rt;
+addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(start, 150); });
+document.getElementById('replay').addEventListener('click', start);
+(document.fonts ? document.fonts.load(FONT(20)).then(() => document.fonts.ready) : Promise.resolve()).then(start, start);
+</script>
+
+</body></html>
