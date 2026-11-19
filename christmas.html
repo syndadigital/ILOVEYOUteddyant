@@ -37,6 +37,7 @@
     -webkit-background-clip: text; background-clip: text; color: transparent;
     filter: drop-shadow(0 2px 12px rgba(242, 193, 78, .45));
   }
+  .title .to { font-family: "Cinzel Decorative", "Mitr", serif; color: var(--gold); font-size: clamp(15px, 4vw, 22px); }
   .title p { margin: 6px 0 0; color: var(--silver); font-size: clamp(13px, 3.4vw, 17px); text-shadow: 0 1px 8px #000; }
 
   .hud {
@@ -77,7 +78,8 @@
 
 <div class="title" id="title">
   <h1>Merry Christmas</h1>
-  <p>ขอให้คริสต์มาสนี้เต็มไปด้วยเวทมนตร์ ✨</p>
+  <p class="to" id="to" hidden></p>
+  <p id="msg">ขอให้คริสต์มาสนี้เต็มไปด้วยเวทมนตร์ ✨</p>
 </div>
 
 <div class="intro" id="intro">
@@ -273,6 +275,17 @@ function bear(ox, oz, fur, wandSide) {
     P(sx * 2, 12, 0, fur); P(sx * 2, 12, -1, fur); P(sx * 1, 12, -1, fur);
     P(sx * 2, 13, -1, fur); P(sx * 2, 13, 0, fur); P(sx * 2, 12, 1, C.muzzle);
   }
+  // pointy wizard hat between the ears, tip bent to one side
+  for (let x = -1; x <= 1; x++) for (let z = -2; z <= 1; z++) P(x, 12, z, C.robe);
+  for (let x = -1; x <= 1; x++) for (let z = -2; z <= 1; z++) {
+    if (Math.abs(x) === 1 && (z === -2 || z === 1)) continue;
+    P(x, 13, z, (x + z) % 2 === 0 ? C.sGreen : C.sSilver);
+  }
+  for (let x = -1; x <= 1; x++) for (let z = -1; z <= 0; z++) P(x, 14, z, C.robe2);
+  P(0, 15, -1, C.robe); P(0, 15, 0, C.robe);
+  P(0, 16, -1, C.robe); P(-wandSide, 17, -1, C.robe);
+  P(-wandSide * 2, 17, -1, 0xe8f6ff, true);
+  P(0, 14, 1, 0xe8f6ff, true);
 }
 bear(-9, 9, C.fur, 1);
 bear(9, 9, C.fur2, -1);
@@ -442,6 +455,10 @@ order.forEach(list => list.forEach((b, r) => { b.t = stageStarts[b.stage] + (r /
 const queue = order.flat().sort((a, b) => a.t - b.t);
 
 const el = id => document.getElementById(id);
+// ?to=ชื่อ&msg=ข้อความ — ใส่ชื่อคนรับและคำอวยพรผ่านลิงก์
+const qs = new URLSearchParams(location.search);
+if (qs.get('to')) { el('to').textContent = 'ถึง ' + qs.get('to').slice(0, 40) + ' 🎄'; el('to').hidden = false; }
+if (qs.get('msg')) el('msg').textContent = qs.get('msg').slice(0, 120);
 const stepEl = el('step'), barEl = el('bar');
 
 // tiny "click" sound for each landing block
