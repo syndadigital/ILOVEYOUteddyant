@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Blocky Magic Christmas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Mitr:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #070b1a;
+    --ink: #f3f1e8;
+    --muted: #b9c0cf;
+    --green: #1f8a4c;
+    --green-deep: #0f4d2a;
+    --silver: #d6dae2;
+    --gold: #f2c14e;
+    --panel: rgba(8, 14, 30, 0.62);
+    --line: rgba(214, 218, 226, 0.35);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font-family: "Mitr", system-ui, sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; touch-action: none; }
+
+  .title {
+    position: fixed; left: 0; right: 0; top: max(16px, env(safe-area-inset-top));
+    text-align: center; pointer-events: none; padding: 0 16px;
+    opacity: 0; transform: translateY(-12px); transition: opacity 1.2s ease, transform 1.2s ease;
+  }
+  .title.show { opacity: 1; transform: none; }
+  .title h1 {
+    margin: 0; font-family: "Cinzel Decorative", serif; font-weight: 700;
+    font-size: clamp(26px, 6vw, 56px); letter-spacing: .04em; line-height: 1.1;
+    background: linear-gradient(180deg, #fff6d6, var(--gold) 55%, #b8862a);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 2px 12px rgba(242, 193, 78, .45));
+  }
+  .title p { margin: 6px 0 0; color: var(--silver); font-size: clamp(13px, 3.4vw, 17px); text-shadow: 0 1px 8px #000; }
+
+  .hud {
+    position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(420px, calc(100% - 32px));
+  }
+  .step { font-size: 14px; background: var(--panel); padding: 4px 14px; border-radius: 99px; color: var(--muted); min-height: 1.4em; text-align: center; text-shadow: 0 1px 6px #000; }
+  .bar { width: 100%; height: 8px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; border: 1px solid var(--line); }
+  .bar i { display: block; height: 100%; width: 0; background: repeating-linear-gradient(90deg, var(--green) 0 14px, var(--silver) 14px 28px); transition: width .15s linear; }
+  .btns { display: flex; gap: 10px; }
+  button {
+    font: 500 16px "Mitr", system-ui, sans-serif; color: var(--ink); cursor: pointer;
+    background: linear-gradient(180deg, var(--green), var(--green-deep));
+    border: 2px solid var(--silver); border-radius: 14px; padding: 12px 22px;
+    box-shadow: 0 4px 0 #062615, 0 8px 24px rgba(31, 138, 76, .35);
+    transition: transform .1s ease, box-shadow .1s ease;
+  }
+  button:active { transform: translateY(3px); box-shadow: 0 1px 0 #062615; }
+  button.ghost { background: var(--panel); border-color: var(--line); box-shadow: none; padding: 12px 14px; }
+  button[hidden] { display: none; }
+
+  .intro {
+    position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none;
+  }
+  .intro .card {
+    pointer-events: auto; text-align: center; padding: 26px 28px; border-radius: 22px;
+    background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(6px);
+    width: min(360px, calc(100% - 32px)); transition: opacity .5s ease, transform .5s ease;
+  }
+  .intro.hide .card { opacity: 0; transform: scale(.94); pointer-events: none; }
+  .intro h2 { margin: 0 0 6px; font-family: "Cinzel Decorative", serif; color: var(--gold); font-size: 26px; }
+  .intro p { margin: 0 0 18px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .err { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="stage" aria-label="ฉากต้นคริสต์มาสแบบบล็อก หน้าปราสาทเวทมนตร์ มีน้องหมีสองตัวในชุดพ่อมดสีเขียวเงิน และหิมะตก"></div>
+
+<div class="title" id="title">
+  <h1>Merry Christmas</h1>
+  <p>ขอให้คริสต์มาสนี้เต็มไปด้วยเวทมนตร์ ✨</p>
+</div>
+
+<div class="intro" id="intro">
+  <div class="card">
+    <h2>Magic Blocks</h2>
+    <p>แตะเพื่อเริ่มต่อบล็อกทีละชิ้น<br>ปราสาท • ต้นคริสต์มาส • น้องหมีพ่อมด</p>
+    <button id="start" type="button">🎄 เริ่มต่อบล็อก</button>
+  </div>
+</div>
+
+<div class="hud">
+  <div class="step" id="step">ลากเพื่อหมุนดูรอบ ๆ ได้</div>
+  <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+  <div class="btns">
+    <button id="fast" class="ghost" type="button" hidden>⏩ เร่ง</button>
+    <button id="replay" type="button" hidden>🔁 ต่อใหม่อีกครั้ง</button>
+    <button id="sound" class="ghost" type="button" aria-pressed="true">🔊</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>
+(function () {
+if (!window.THREE) {
+  document.body.insertAdjacentHTML('beforeend', '<div class="err">โหลดฉาก 3D ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชอีกครั้ง</div>');
+  return;
+}
+
+/* ---------- palette ---------- */
+const C = {
+  snow: 0xdfe6f0, snow2: 0xcfd9e8, snow3: 0xc0cde0,
+  cobble: 0x7b7f88, cobble2: 0x5f636c,
+  rock: 0x4a4e58, rock2: 0x3b3f48,
+  stone: 0x8a8f99, stone2: 0x737883, stone3: 0x9da2ab,
+  roof: 0x24304d, roof2: 0x1c2640,
+  window: 0xffc35c, window2: 0xffdb8a,
+  trunk: 0x5b3a1e, trunk2: 0x4a2f17,
+  pine: 0x1d6b3a, pine2: 0x175a30, pine3: 0x22803f,
+  emerald: 0x14a65a, silver: 0xd9dde3, red: 0xc8102e, gold: 0xf2c14e,
+  robe: 0x17171f, robe2: 0x202029,
+  sGreen: 0x1a6b3c, sSilver: 0xb9bec7,
+  shirt: 0xdfe2e7, fur: 0x8a5a33, fur2: 0xa8723f, muzzle: 0xdcb48e,
+  black: 0x111111, blush: 0xe58a8a, wood: 0x3a2412,
+  pole: 0x23242a, lamp: 0xffd27a,
+};
+
+/* ---------- voxel model ---------- */
+const cells = new Map();
+const rnd = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+function put(x, y, z, color, stage, glow = false) {
+  cells.set(x + ',' + y + ',' + z, { x, y, z, color, stage, glow });
+}
+const pick = arr => arr[Math.floor(rnd() * arr.length)];
+
+const STAGES = [
+  { name: 'ปูพื้นหิมะ ❄️', ms: 2600 },
+  { name: 'สร้างปราสาทเวทมนตร์ 🏰', ms: 6500 },
+  { name: 'ต่อต้นคริสต์มาส 🎄', ms: 5500 },
+  { name: 'น้องหมีในชุดพ่อมดเขียว-เงิน 🧸', ms: 5000 },
+  { name: 'ของขวัญและไฟประดับ 🎁', ms: 2600 },
+  { name: 'ดาวบนยอดต้นไม้ ⭐', ms: 1400 },
+];
+
+// 0 — snowy ground + cobble path + castle mound
+for (let x = -24; x <= 24; x++) for (let z = -26; z <= 24; z++) {
+  const d = Math.hypot(x, z * 0.95);
+  if (d > 25) continue;
+  let col = pick([C.snow, C.snow, C.snow2, C.snow3]);
+  if (Math.abs(x) <= 1 && z >= 8) col = pick([C.cobble, C.cobble2, C.cobble]);
+  put(x, 0, z, col, 0);
+}
+for (let x = -17; x <= 17; x++) for (let z = -26; z <= -11; z++) {
+  if (Math.hypot(x, z * 0.95) > 25) continue;
+  const edge = Math.min(17 - Math.abs(x), -11 - z);
+  const h = Math.min(3, 1 + edge);
+  for (let y = 1; y <= h; y++) put(x, y, z, y === h ? pick([C.snow, C.snow2]) : pick([C.rock, C.rock2]), 0);
+}
+
+// 1 — castle (sits on mound top, y >= 4)
+const B = 4;
+function shellBox(x0, x1, y0, y1, z0, z1, stage) {
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) {
+    if (x > x0 && x < x1 && z > z0 && z < z1 && y < y1) continue;
+    put(x, y, z, pick([C.stone, C.stone2, C.stone3]), stage);
+  }
+}
+function tower(cx, cz, r, h, stage) {
+  for (let y = B; y <= B + h; y++) for (let x = -r - 1; x <= r + 1; x++) for (let z = -r - 1; z <= r + 1; z++) {
+    const d = Math.hypot(x, z);
+    if (d <= r + 0.3 && (d > r - 1.2 || y === B + h)) put(cx + x, y, cz + z, pick([C.stone, C.stone2, C.stone3]), stage);
+  }
+  // lit windows on the front side
+  for (let y = B + 3; y < B + h - 1; y += 4) {
+    put(cx, y, cz + r, C.window, stage, true);
+    put(cx, y + 1, cz + r, C.window2, stage, true);
+  }
+  // cone roof
+  let rr = r + 1, y = B + h + 1;
+  while (rr >= 0) {
+    for (let x = -Math.ceil(rr); x <= Math.ceil(rr); x++) for (let z = -Math.ceil(rr); z <= Math.ceil(rr); z++) {
+      const d = Math.hypot(x, z);
+      if (d <= rr + 0.3 && d > rr - 1.3) put(cx + x, y, cz + z, rnd() < 0.18 ? C.snow : pick([C.roof, C.roof2]), stage);
+    }
+    rr -= 0.55; y++;
+  }
+  put(cx, y, cz, C.snow, stage);
+  put(cx, y + 1, cz, C.gold, stage, true);
+}
+shellBox(-9, 9, B, B + 7, -19, -14, 1);
+for (let x = -9; x <= 9; x += 2) { put(x, B + 8, -14, rnd() < .5 ? C.snow : C.stone, 1); put(x, B + 8, -19, C.stone, 1); }
+for (let x = -7; x <= 7; x += 3) for (const y of [B + 2, B + 5]) {
+  put(x, y, -14, C.window, 1, true); put(x, y + 1, -14, C.window2, 1, true);
+}
+put(-1, B, -14, C.wood, 1); put(0, B, -14, C.wood, 1); put(1, B, -14, C.wood, 1);
+put(-1, B + 1, -14, C.wood, 1); put(0, B + 1, -14, C.wood, 1); put(1, B + 1, -14, C.wood, 1); put(0, B + 2, -14, C.wood, 1);
+tower(-12, -16, 2.6, 14, 1);
+tower(12, -16, 2.6, 12, 1);
+tower(0, -21, 3.2, 20, 1);
+tower(-6, -22, 2, 16, 1);
+tower(7, -22, 2.2, 17, 1);
+
+// 2 — christmas tree
+for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) for (let y = 1; y <= 3; y++) put(x, y, z, pick([C.trunk, C.trunk2]), 2);
+const tiers = [[3, 6, 7.2, 3.2], [8, 6, 5.8, 2.2], [13, 5, 4.4, 1.2], [17, 5, 3, 0.2]];
+const shellCells = [];
+for (const [y0, hgt, rb, rt] of tiers) {
+  for (let i = 0; i < hgt; i++) {
+    const y = y0 + i, r = rb + (rt - rb) * (i / (hgt - 1));
+    const R = Math.ceil(r);
+    for (let x = -R; x <= R; x++) for (let z = -R; z <= R; z++) {
+      const d = Math.hypot(x, z);
+      if (d > r + 0.35) continue;
+      if (i > 0 && d < r - 1.6) continue;
+      const outer = d > r - 0.9;
+      put(x, y, z, pick([C.pine, C.pine2, C.pine3]), 2);
+      if (outer) shellCells.push({ x, y, z, i, hgt, a: Math.atan2(z, x) });
+    }
+  }
+}
+put(0, 22, 0, C.pine, 2); put(0, 23, 0, C.pine2, 2);
+// silver tinsel spiral, snow on tier rims, ornaments and fairy lights
+for (const c of shellCells) {
+  const spiral = ((c.a / (Math.PI * 2) + c.y * 0.09) % 1 + 1) % 1;
+  if (spiral < 0.06) { put(c.x, c.y, c.z, C.silver, 2); continue; }
+  if (c.i === 0 && rnd() < 0.45) { put(c.x, c.y, c.z, C.snow, 2); continue; }
+  const r = rnd();
+  if (r < 0.10) put(c.x, c.y, c.z, pick([C.emerald, C.silver, C.red, C.gold]), 2);
+  else if (r < 0.17) put(c.x, c.y, c.z, pick([0xfff1c2, 0x8dffb7, 0xffd166]), 2, true);
+}
+
+// 3 — teddy bears in green & silver wizard robes
+function bear(ox, oz, fur, wandSide) {
+  const S = 3;
+  const P = (x, y, z, col, glow) => put(ox + x, y, oz + z, col, S, glow);
+  for (const sx of [-2, -1, 1, 2]) for (let z = -1; z <= 1; z++) P(sx, 1, z, fur);
+  P(-2, 1, 2, C.muzzle); P(-1, 1, 2, fur); P(1, 1, 2, fur); P(2, 1, 2, C.muzzle);
+  // robe (flared hem)
+  for (let x = -3; x <= 3; x++) for (let z = -2; z <= 2; z++) P(x, 2, z, z === 2 && Math.abs(x) <= 1 ? C.sGreen : C.robe);
+  for (let y = 3; y <= 6; y++) for (let x = -2; x <= 2; x++) for (let z = -1; z <= 1; z++) P(x, y, z, pick([C.robe, C.robe2]));
+  for (let y = 3; y <= 6; y++) P(0, y, 1, y >= 4 ? C.shirt : C.sGreen);
+  for (let y = 4; y <= 6; y++) P(0, y, 2, y % 2 ? C.sGreen : C.sSilver); // striped tie
+  P(-1, 6, 1, C.sGreen); P(1, 6, 1, C.sGreen); P(-1, 5, 1, C.sGreen); P(1, 5, 1, C.sGreen); // green lining
+  P(-2, 4, 2, C.sGreen); P(-2, 5, 2, C.sSilver); // house badge
+  // sleeves + paws
+  for (const sx of [-3, 3]) {
+    for (let y = 3; y <= 6; y++) P(sx, y, 0, C.robe);
+    P(sx, 3, 1, C.sGreen); P(sx, 2, 1, fur);
+  }
+  // wand
+  const wx = wandSide * 3;
+  P(wx, 2, 2, C.wood); P(wx, 2, 3, C.wood); P(wx, 3, 4, C.wood);
+  P(wx, 4, 5, 0x9dffc8, true);
+  // striped scarf
+  for (let x = -3; x <= 3; x++) for (let z = -2; z <= 2; z++) {
+    if (Math.abs(x) < 3 && Math.abs(z) < 2) continue;
+    P(x, 7, z, (x + z) % 2 === 0 ? C.sGreen : C.sSilver);
+  }
+  for (let y = 3; y <= 6; y++) P(-wandSide * 2, y, 2, y % 2 ? C.sSilver : C.sGreen);
+  // head
+  for (let y = 8; y <= 11; y++) for (let x = -2; x <= 2; x++) for (let z = -2; z <= 1; z++) P(x, y, z, fur);
+  for (let x = -1; x <= 1; x++) for (const y of [8, 9]) P(x, y, 2, C.muzzle);
+  P(0, 9, 3, C.black); P(0, 8, 2, 0x6b3a2a);
+  P(-1, 10, 2, C.black); P(1, 10, 2, C.black);
+  P(-2, 9, 2, C.blush); P(2, 9, 2, C.blush);
+  for (const sx of [-1, 1]) {
+    P(sx * 2, 12, 0, fur); P(sx * 2, 12, -1, fur); P(sx * 1, 12, -1, fur);
+    P(sx * 2, 13, -1, fur); P(sx * 2, 13, 0, fur); P(sx * 2, 12, 1, C.muzzle);
+  }
+}
+bear(-9, 9, C.fur, 1);
+bear(9, 9, C.fur2, -1);
+
+// 4 — gifts + lamp posts
+function gift(cx, cz, w, h, box, ribbon) {
+  for (let x = 0; x < w; x++) for (let z = 0; z < w; z++) for (let y = 1; y <= h; y++) {
+    const isRib = x === Math.floor(w / 2) || z === Math.floor(w / 2);
+    put(cx + x, y, cz + z, isRib ? ribbon : box, 4);
+  }
+  put(cx + Math.floor(w / 2), h + 1, cz + Math.floor(w / 2), ribbon, 4);
+}
+gift(-5, 3, 3, 2, C.sGreen, C.silver);
+gift(3, 3, 3, 3, C.red, C.gold);
+gift(-3, 6, 2, 2, C.silver, C.sGreen);
+gift(2, 7, 2, 2, C.sGreen, C.gold);
+gift(5, -1, 2, 2, C.gold, C.red);
+gift(-7, -1, 2, 3, C.red, C.silver);
+for (const sx of [-15, 15]) for (const lz of [15]) {
+  for (let y = 1; y <= 5; y++) put(sx, y, lz, C.pole, 4);
+  put(sx, 6, lz, C.lamp, 4, true);
+  put(sx, 7, lz, C.pole, 4);
+  put(sx, 8, lz, C.snow, 4);
+}
+
+// 5 — 3D star
+const starPts = [[0,0],[-1,0],[1,0],[-2,0],[2,0],[0,1],[0,2],[0,3],[0,-1],[-1,1],[1,1],[-1,-1],[1,-1],[-1,-2],[1,-2],[-2,-3],[2,-3],[-3,1],[3,1]];
+for (const [sx, sy] of starPts) for (const z of [0]) put(sx, 27 + sy, z, sx === 0 && sy === 0 ? 0xfff6cc : C.gold, 5, true);
+put(0, 27, 1, 0xfff6cc, 5, true); put(0, 27, -1, 0xfff6cc, 5, true);
+put(0, 24, 0, C.gold, 5, true);
+
+/* ---------- three.js scene ---------- */
+const stageEl = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stageEl.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a1230);
+scene.fog = new THREE.FogExp2(0x0d1736, 0.0115);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 400);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 13, -2);
+controls.enableDamping = true;
+controls.enablePan = false;
+controls.minDistance = 25; controls.maxDistance = 95;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+function frameCamera() {
+  const a = innerWidth / innerHeight;
+  const dist = a < 0.8 ? 88 : a < 1.2 ? 70 : 60;
+  camera.aspect = a;
+  camera.position.set(0, 21, dist);
+  camera.updateProjectionMatrix();
+}
+frameCamera();
+
+scene.add(new THREE.HemisphereLight(0x9fb4ff, 0x1a2238, 0.55));
+const moon = new THREE.DirectionalLight(0xc8d6ff, 0.75);
+moon.position.set(-30, 50, 30);
+moon.castShadow = true;
+moon.shadow.mapSize.set(2048, 2048);
+Object.assign(moon.shadow.camera, { left: -32, right: 32, top: 40, bottom: -20, near: 1, far: 140 });
+moon.shadow.bias = -0.0008;
+scene.add(moon);
+const treeGlow = new THREE.PointLight(0xffc56b, 0.9, 30, 2);
+treeGlow.position.set(0, 12, 6);
+scene.add(treeGlow);
+const castleGlow = new THREE.PointLight(0xffb84d, 0.9, 30, 2);
+castleGlow.position.set(0, 10, -10);
+scene.add(castleGlow);
+
+// sky stars + moon disc
+{
+  const g = new THREE.BufferGeometry(), n = 700, p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const th = Math.random() * Math.PI * 2, ph = Math.random() * Math.PI * 0.42;
+    p.set([Math.cos(th) * Math.sin(ph) * 180, Math.cos(ph) * 180 - 10, Math.sin(th) * Math.sin(ph) * 180], i * 3);
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, fog: false })));
+  const m = new THREE.Mesh(new THREE.CircleGeometry(7, 40), new THREE.MeshBasicMaterial({ color: 0xfff4d6, fog: false }));
+  m.position.set(75, 45, -120); m.lookAt(0, 0, 0); scene.add(m);
+}
+
+// instanced blocks
+const all = [...cells.values()];
+const order = [];
+STAGES.forEach((_, s) => {
+  const list = all.filter(b => b.stage === s);
+  list.forEach(b => { b.k = b.y + rnd() * 2.2 + (s === 0 ? Math.hypot(b.x, b.z) * 0.08 : 0); });
+  list.sort((a, b) => a.k - b.k);
+  order.push(list);
+});
+
+const geo = new THREE.BoxGeometry(0.94, 0.94, 0.94);
+const solidMat = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0.04 });
+const glowMat = new THREE.MeshBasicMaterial();
+const solids = all.filter(b => !b.glow), glows = all.filter(b => b.glow);
+const solidMesh = new THREE.InstancedMesh(geo, solidMat, solids.length);
+const glowMesh = new THREE.InstancedMesh(geo, glowMat, glows.length);
+solidMesh.castShadow = solidMesh.receiveShadow = true;
+[solidMesh, glowMesh].forEach(m => { m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); });
+
+const tmpC = new THREE.Color(), tmpM = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+function shade(hex, j) { tmpC.setHex(hex); const f = 1 + (rnd() - 0.5) * j; tmpC.r *= f; tmpC.g *= f; tmpC.b *= f; return tmpC; }
+solids.forEach((b, i) => { b.mesh = solidMesh; b.idx = i; solidMesh.setColorAt(i, shade(b.color, 0.12)); });
+glows.forEach((b, i) => { b.mesh = glowMesh; b.idx = i; tmpC.setHex(b.color).multiplyScalar(1.35); glowMesh.setColorAt(i, tmpC); });
+[solidMesh, glowMesh].forEach(m => m.instanceColor.needsUpdate = true);
+const twinkles = glows.filter(b => b.stage === 2);
+
+function place(b, yOff, s) {
+  tmpM.makeScale(s, s, s).setPosition(b.x, b.y + yOff, b.z);
+  b.mesh.setMatrixAt(b.idx, tmpM);
+}
+function hideAll() { all.forEach(b => b.mesh.setMatrixAt(b.idx, zero)); solidMesh.instanceMatrix.needsUpdate = glowMesh.instanceMatrix.needsUpdate = true; }
+
+// floating candles (appear at the end)
+const candles = new THREE.Group();
+const candleMat = new THREE.MeshStandardMaterial({ color: 0xf3ead8, roughness: 0.6 });
+const flameMat = new THREE.MeshBasicMaterial({ color: 0xffd27a });
+for (let i = 0; i < 16; i++) {
+  const c = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.6, 0.6), candleMat);
+  const flame = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.5, 0.35), flameMat);
+  flame.position.y = 1.1;
+  c.add(body, flame);
+  const a = (i / 16) * Math.PI * 2, r = 13 + (i % 3) * 4;
+  c.position.set(Math.cos(a) * r, 19 + (i % 4) * 2.2, Math.sin(a) * r * 0.8);
+  c.userData = { base: c.position.y, ph: Math.random() * 6 };
+  c.scale.setScalar(0.001);
+  candles.add(c);
+}
+scene.add(candles);
+
+// falling snow
+const SNOW = 1800;
+const snowGeo = new THREE.BufferGeometry();
+const sp = new Float32Array(SNOW * 3), sv = new Float32Array(SNOW);
+for (let i = 0; i < SNOW; i++) { sp.set([(Math.random() - .5) * 90, Math.random() * 60, (Math.random() - .5) * 90], i * 3); sv[i] = 1.5 + Math.random() * 2.5; }
+snowGeo.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+const flake = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 32;
+  const x = c.getContext('2d'), g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.5, 'rgba(255,255,255,.7)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 32, 32);
+  return new THREE.CanvasTexture(c);
+})();
+const snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ size: 0.55, map: flake, transparent: true, depthWrite: false, opacity: 0.9 }));
+scene.add(snow);
+
+// bloom
+const composer = new THREE.EffectComposer(renderer);
+composer.addPass(new THREE.RenderPass(scene, camera));
+const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.8, 0.45, 0.9);
+composer.addPass(bloom);
+
+/* ---------- build animation ---------- */
+const DROP = 520, HEIGHT = 9;
+let building = false, buildT = 0, speed = 1, stageStarts = [], total = 0, cursor = [], active = [], doneCount = 0, finished = false;
+STAGES.forEach(s => { stageStarts.push(total); total += s.ms; });
+order.forEach(list => list.forEach((b, r) => { b.t = stageStarts[b.stage] + (r / list.length) * STAGES[b.stage].ms; }));
+const queue = order.flat().sort((a, b) => a.t - b.t);
+
+const el = id => document.getElementById(id);
+const stepEl = el('step'), barEl = el('bar');
+
+// tiny "click" sound for each landing block
+let ac = null, soundOn = true, lastClick = 0;
+function click(pitch) {
+  if (!soundOn || !ac) return;
+  const now = ac.currentTime;
+  if (now - lastClick < 0.045) return;
+  lastClick = now;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'triangle'; o.frequency.value = pitch;
+  g.gain.setValueAtTime(0.06, now); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+  o.connect(g).connect(ac.destination); o.start(now); o.stop(now + 0.09);
+}
+function chime() {
+  if (!soundOn || !ac) return;
+  [659, 784, 988, 1319].forEach((f, i) => {
+    const t = ac.currentTime + i * 0.13, o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 1.3);
+  });
+}
+
+function startBuild() {
+  try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (e) { ac = null; }
+  hideAll();
+  candles.children.forEach(c => c.scale.setScalar(0.001));
+  building = true; finished = false; buildT = 0; speed = 1; doneCount = 0; active = []; qi = 0;
+  el('intro').classList.add('hide');
+  el('title').classList.remove('show');
+  el('replay').hidden = true; el('fast').hidden = false;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { buildT = total + DROP; }
+}
+let qi = 0;
+function easeOutBack(t) { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
+
+function updateBuild(dt) {
+  buildT += dt * speed;
+  while (qi < queue.length && queue[qi].t <= buildT) active.push(queue[qi++]);
+  let dirty = false;
+  active = active.filter(b => {
+    const p = Math.min(1, (buildT - b.t) / DROP);
+    dirty = true;
+    if (p >= 1) { place(b, 0, 1); doneCount++; click(b.glow ? 1400 : 500 + b.y * 28); return false; }
+    const e = easeOutBack(p);
+    place(b, (1 - e) * HEIGHT, 0.4 + 0.6 * Math.min(1, p * 1.6));
+    return true;
+  });
+  if (dirty) { solidMesh.instanceMatrix.needsUpdate = glowMesh.instanceMatrix.needsUpdate = true; }
+  const s = Math.min(STAGES.length - 1, stageStarts.filter(x => x <= buildT).length - 1);
+  stepEl.textContent = `ขั้นที่ ${s + 1}/${STAGES.length} · ${STAGES[s].name}`;
+  barEl.style.width = (doneCount / queue.length * 100).toFixed(1) + '%';
+  if (qi >= queue.length && active.length === 0) {
+    building = false; finished = true; finishT = 0;
+    stepEl.textContent = 'เสร็จแล้ว! ลากเพื่อหมุนชมรอบ ๆ ได้เลย ✨';
+    el('title').classList.add('show');
+    el('fast').hidden = true; el('replay').hidden = false;
+    chime();
+  }
+}
+
+el('start').addEventListener('click', startBuild);
+el('replay').addEventListener('click', startBuild);
+el('fast').addEventListener('click', () => { speed = speed === 1 ? 3 : 1; el('fast').textContent = speed === 1 ? '⏩ เร่ง' : '▶️ ปกติ'; });
+el('sound').addEventListener('click', e => { soundOn = !soundOn; e.currentTarget.textContent = soundOn ? '🔊' : '🔇'; e.currentTarget.setAttribute('aria-pressed', soundOn); });
+
+hideAll();
+
+/* ---------- loop ---------- */
+let last = performance.now(), finishT = 0, twinkleAcc = 0;
+function loop(now) {
+  const dt = Math.min(50, now - last); last = now;
+  if (building) updateBuild(dt);
+  if (finished) {
+    finishT += dt;
+    candles.children.forEach((c, i) => {
+      const s = Math.min(1, Math.max(0, (finishT - i * 90) / 600));
+      c.scale.setScalar(Math.max(0.001, s));
+      c.position.y = c.userData.base + Math.sin(now / 900 + c.userData.ph) * 0.6;
+    });
+  }
+  // twinkle tree lights
+  twinkleAcc += dt;
+  if (twinkleAcc > 140 && twinkles.length) {
+    twinkleAcc = 0;
+    for (let k = 0; k < 6; k++) {
+      const b = twinkles[Math.floor(Math.random() * twinkles.length)];
+      tmpC.setHex(b.color).multiplyScalar(0.35 + Math.random() * 1.2);
+      glowMesh.setColorAt(b.idx, tmpC);
+    }
+    glowMesh.instanceColor.needsUpdate = true;
+  }
+  // snow
+  const p = snowGeo.attributes.position.array, t = now / 1000;
+  for (let i = 0; i < SNOW; i++) {
+    p[i * 3 + 1] -= sv[i] * dt / 1000;
+    p[i * 3] += Math.sin(t + i) * 0.006;
+    if (p[i * 3 + 1] < 0) p[i * 3 + 1] = 60;
+  }
+  snowGeo.attributes.position.needsUpdate = true;
+  treeGlow.intensity = 0.85 + Math.sin(now / 400) * 0.1;
+  controls.update();
+  composer.render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  frameCamera();
+});
+})();
+</script>
+</body>
+</html>
