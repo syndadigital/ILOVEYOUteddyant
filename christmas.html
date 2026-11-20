@@ -132,7 +132,8 @@
 <div class="score" id="score" hidden>⭐ 0/10</div>
 
 <div class="hud">
-  <button class="tap" id="tap" type="button">🎶 แตะหน้าจอเพื่อเปิดเพลง</button>
+  <button class="tap" id="tap" type="button" hidden>🎶 แตะหน้าจอเพื่อเปิดเพลง</button>
+  <button class="tap" id="enter" type="button" hidden>✨ เข้าสู่โลกของ TEDDYANT 🎶</button>
   <div class="step" id="step">ลากเพื่อหมุนดูรอบ ๆ ได้</div>
   <div class="bar" aria-hidden="true"><i id="bar"></i></div>
   <div class="btns">
@@ -495,67 +496,111 @@ function hideAll() {
   solidMesh.instanceMatrix.needsUpdate = glowMesh.instanceMatrix.needsUpdate = studMesh.instanceMatrix.needsUpdate = true;
 }
 
-/* ---------- opening: a LEGO QR code builds itself, then bursts into the scene ---------- */
-const QR_ROWS = '00000000000000000000000000000000000|01111111010100101101000010011111110|01000001000000110001110101010000010|01011101001011011111011111010111010|01011101011010000110000011010111010|01011101011101100110100000010111010|01000001011110011001010101010000010|01111111010101010101010101011111110|00000000011010010011111000000000000|01000101111111001110001001111110010|00111100100101001111000010100011100|00111011101001111101001111000010100|00011110011100101100101011010000010|01001001001011101100101001010110100|01110010011100010001111110111011000|01110101010011101001010011111010100|01111110110001011110001100110000000|01111011010100110110101100010111100|01011010001011000101000010100011010|01001101110010111010010011101010100|00110000001010000011001110111000110|01100111000111001001111100010010100|01010000000001110100100110001011100|00011101010001100110101110000100100|00010100010111100011111000110010100|01100111011001111010011101111110110|00000000011001011011000001000101100|01111111011100011101010101010110100|01000001000111001000111101000100000|01011101011100110100011001111110100|01011101001111110001111101011101000|01011101001000101000011101011100000|01000001000011001111001011000000000|01111111010010110110011011100000010|00000000000000000000000000000000000'.split('|');
-const QN = QR_ROWS.length, QY = 5, QZ = 4;
+/* ---------- opening: "WELCOME TO MY WORLD · TEDDYANT" builds itself in LEGO, tap to enter ---------- */
+const FONT5 = {
+  W: '10001|10001|10001|10101|10101|10101|01010', E: '11111|10000|10000|11110|10000|10000|11111',
+  L: '10000|10000|10000|10000|10000|10000|11111', C: '01110|10001|10000|10000|10000|10001|01110',
+  O: '01110|10001|10001|10001|10001|10001|01110', M: '10001|11011|10101|10101|10001|10001|10001',
+  T: '11111|00100|00100|00100|00100|00100|00100', Y: '10001|10001|01010|00100|00100|00100|00100',
+  R: '11110|10001|10001|11110|10100|10010|10001', D: '11110|10001|10001|10001|10001|10001|11110',
+  A: '01110|10001|10001|11111|10001|10001|10001', N: '10001|11001|10101|10011|10001|10001|10001',
+};
+const LEGO = [0xd01012, 0xf5c518, 0x0a5fbf, 0x1f8a4c, 0xf57c00, 0xe8eef5];
+const WORDS = [
+  { text: 'WELCOME TO MY', size: 0.38, y: 22.6, colors: [0xf4f6f8, 0xdfe6ee] },
+  { text: 'TEDDYANT', size: 0.62, y: 16.4, colors: null },
+  { text: 'WORLD', size: 0.42, y: 12.2, colors: [0xf4f6f8, 0xdfe6ee] },
+];
+const QZ = 4;
 const qrBricks = [];
-QR_ROWS.forEach((row, r) => [...row].forEach((v, c) => qrBricks.push({
-  x: c - (QN - 1) / 2, y: QY + (QN - 1 - r), z: QZ, dark: v === '1',
-  t: (QN - 1 - r) * 120 + Math.random() * 260,
-  vel: new THREE.Vector3((Math.random() - .5) * 26, 6 + Math.random() * 16, 8 + Math.random() * 18),
-  spin: new THREE.Vector3(Math.random() * 8, Math.random() * 8, Math.random() * 8),
-})));
-const qrMesh = new THREE.InstancedMesh(geo, solidMat, qrBricks.length);
+let wOrder = 0;
+WORDS.forEach(w => {
+  const chars = [...w.text];
+  const cols = chars.reduce((n, ch) => n + (ch === ' ' ? 3 : 6), -1);
+  let cx = -(cols - 1) / 2, li = 0;
+  chars.forEach(ch => {
+    if (ch === ' ') { cx += 3; return; }
+    const rows = FONT5[ch].split('|');
+    const col = w.colors ? null : LEGO[li % 5];
+    for (let c = 0; c < 5; c++) for (let r = 6; r >= 0; r--) {
+      if (rows[r][c] !== '1') continue;
+      qrBricks.push({
+        x: (cx + c) * w.size, y: w.y + (6 - r) * w.size, z: QZ, size: w.size,
+        color: col ?? pick(w.colors),
+        t: wOrder * 16 + Math.random() * 120,
+        vel: new THREE.Vector3((Math.random() - .5) * 26, 6 + Math.random() * 16, 8 + Math.random() * 18),
+        spin: new THREE.Vector3(Math.random() * 8, Math.random() * 8, Math.random() * 8),
+      });
+      wOrder++;
+    }
+    cx += 6; li++;
+  });
+  wOrder += 10; // a little pause between lines
+});
+const qrMat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05, fog: false, emissive: 0x1a1f33 });
+const qrMesh = new THREE.InstancedMesh(geo, qrMat, qrBricks.length);
 const qrStudGeo = studGeo.clone(); qrStudGeo.rotateX(Math.PI / 2);
-const qrStuds = new THREE.InstancedMesh(qrStudGeo, solidMat, qrBricks.length);
+const qrStuds = new THREE.InstancedMesh(qrStudGeo, qrMat, qrBricks.length);
 qrBricks.forEach((b, i) => {
-  tmpC.setHex(b.dark ? pick([0x1a7a40, 0x1f8a4c, 0x1a7a40]) : pick([0xffffff, 0xf6f6f0]));
+  tmpC.setHex(b.color);
   qrMesh.setColorAt(i, tmpC); qrStuds.setColorAt(i, tmpC);
   qrMesh.setMatrixAt(i, zero); qrStuds.setMatrixAt(i, zero);
 });
 [qrMesh, qrStuds].forEach(m => { m.castShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.instanceColor.needsUpdate = true; scene.add(m); });
-const QR_BUILD = (QN - 1) * 120 + 260 + 520, QR_HOLD = 2200, QR_BURST = 1300;
-let qrT = -1, qrClicked = 0;
-const tq = new THREE.Quaternion(), te = new THREE.Euler(), tv = new THREE.Vector3(), ts = new THREE.Vector3();
+const QR_BUILD = Math.max(...qrBricks.map(b => b.t)) + 520, QR_BURST = 1300;
+let qrT = -1, qrClicked = 0, burstAt = -1;
+const tq = new THREE.Quaternion(), te = new THREE.Euler(), tv = new THREE.Vector3(), ts = new THREE.Vector3(), tw = new THREE.Vector3();
 function setQR(i, b, x, y, z, s, rot) {
   te.set(rot ? rot.x : 0, rot ? rot.y : 0, rot ? rot.z : 0); tq.setFromEuler(te);
-  ts.set(s, s, s); tv.set(x, y, z);
+  const k = s * b.size;
+  ts.set(k, k, k); tv.set(x, y, z);
   tmpM.compose(tv, tq, ts); qrMesh.setMatrixAt(i, tmpM);
-  tv.set(0, 0, 0.52).applyQuaternion(tq).multiplyScalar(s).add(new THREE.Vector3(x, y, z));
-  tmpM.compose(tv, tq, ts); qrStuds.setMatrixAt(i, tmpM);
+  tw.set(0, 0, 0.52 * k).applyQuaternion(tq).add(tv);
+  tmpM.compose(tw, tq, ts); qrStuds.setMatrixAt(i, tmpM);
 }
+const enterBtn = document.getElementById('enter');
 function startQR() {
   hideAll(); candles.children.forEach(c => c.scale.setScalar(0.001));
   quizEl.hidden = true; el('title').classList.remove('show');
-  el('replay').hidden = true; el('fast').hidden = true;
-  building = false; finished = false; qrT = 0; qrClicked = 0;
+  el('replay').hidden = true; el('fast').hidden = true; enterBtn.hidden = true;
+  building = false; finished = false; qrT = 0; qrClicked = 0; burstAt = -1;
   endGameCleanup();
   controls.autoRotate = false; controls.target.set(0, 13, -2); frameCamera(); treeGlow.visible = false;
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { qrT = -1; qrHide(); controls.autoRotate = true; treeGlow.visible = true; startBuild(); }
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) qrT = QR_BUILD;
 }
+function enterWorld() {
+  if (qrT < QR_BUILD || burstAt >= 0) return;
+  burstAt = qrT; enterBtn.hidden = true;
+  if (ac && soundOn) [79, 84, 88, 91].forEach((m, i) => bell(m + 12, ac.currentTime + i * 0.07, 0.09, 1.2));
+}
+enterBtn.addEventListener('click', enterWorld);
+renderer.domElement.addEventListener('click', enterWorld);
 function qrHide() { qrBricks.forEach((b, i) => { qrMesh.setMatrixAt(i, zero); qrStuds.setMatrixAt(i, zero); }); qrMesh.instanceMatrix.needsUpdate = qrStuds.instanceMatrix.needsUpdate = true; }
 function updateQR(dt) {
   qrT += dt;
-  const burstT = qrT - QR_BUILD - QR_HOLD;
+  const burstT = burstAt >= 0 ? qrT - burstAt : -1;
+  const bob = Math.sin(qrT / 700) * 0.25;
   let landed = 0;
   qrBricks.forEach((b, i) => {
     if (burstT > 0) {
       const u = burstT / 1000;
       const s = Math.max(0.001, 1 - burstT / QR_BURST);
-      setQR(i, b, b.x + b.vel.x * u, b.y + b.vel.y * u - 9 * u * u, b.z + b.vel.z * u, s, b.spin.clone().multiplyScalar(u));
+      setQR(i, b, b.x + b.vel.x * u, b.y + bob + b.vel.y * u - 9 * u * u, b.z + b.vel.z * u, s, b.spin.clone().multiplyScalar(u));
       return;
     }
     const p = (qrT - b.t) / DROP;
     if (p <= 0) { qrMesh.setMatrixAt(i, zero); qrStuds.setMatrixAt(i, zero); return; }
-    if (p >= 1) { setQR(i, b, b.x, b.y, b.z, 1); landed++; return; }
+    if (p >= 1) { setQR(i, b, b.x, b.y + (qrT >= QR_BUILD ? bob : 0), b.z, 1); landed++; return; }
     const e = easeOutBack(p);
-    setQR(i, b, b.x, b.y + (1 - e) * HEIGHT, b.z, 0.4 + 0.6 * Math.min(1, p * 1.6));
+    setQR(i, b, b.x, b.y + (1 - e) * HEIGHT * 0.6, b.z, 0.4 + 0.6 * Math.min(1, p * 1.6));
   });
   if (landed > qrClicked) { click(450 + landed % 7 * 60); qrClicked = landed; }
   qrMesh.instanceMatrix.needsUpdate = qrStuds.instanceMatrix.needsUpdate = true;
-  if (burstT <= 0) {
-    stepEl.textContent = landed < qrBricks.length ? 'กำลังต่อเลโก้ QR code… 🧱' : 'QR code เลโก้เสร็จแล้ว! ✨';
+  if (burstT < 0) {
+    const done = landed >= qrBricks.length;
+    stepEl.textContent = done ? 'แตะที่ไหนก็ได้ เพื่อเข้าสู่โลกของ TEDDYANT ✨' : 'กำลังต่อเลโก้… 🧱';
     barEl.style.width = (landed / qrBricks.length * 100).toFixed(1) + '%';
+    if (done && enterBtn.hidden) enterBtn.hidden = false;
   }
   if (burstT > QR_BURST) { qrT = -1; qrHide(); controls.autoRotate = true; treeGlow.visible = true; startBuild(); }
 }
