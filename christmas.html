@@ -95,6 +95,8 @@
   .wish ul { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 8px; text-align: left; }
   .wish li { background: rgba(255,255,255,.06); border-radius: 12px; padding: 10px 12px; font-size: 15px; line-height: 1.45; }
   .wish .sign { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+  .tap { font-size: 14px; padding: 8px 16px; border-radius: 99px; box-shadow: none; background: rgba(242,193,78,.18); border: 1px solid var(--gold); animation: bob 1.6s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-4px); } }
   .err { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 </style>
 </head>
@@ -107,17 +109,12 @@
   <p id="msg">Wishing you a magical Christmas full of warm hugs &amp; twinkling lights ✨</p>
 </div>
 
-<div class="intro" id="intro">
-  <div class="card">
-    <h2>Magic Blocks</h2>
-    <p>แตะเพื่อเริ่มต่อบล็อกทีละชิ้น พร้อมเพลงเวทมนตร์ 🎶<br>ปราสาท • ต้นคริสต์มาส • น้องหมีพ่อมด</p>
-    <button id="start" type="button">🎄 เริ่มต่อบล็อก</button>
-  </div>
-</div>
+
 
 <div class="quiz" id="quiz" hidden><div class="qcard" id="qcard"></div></div>
 
 <div class="hud">
+  <button class="tap" id="tap" type="button">🎶 แตะหน้าจอเพื่อเปิดเพลง</button>
   <div class="step" id="step">ลากเพื่อหมุนดูรอบ ๆ ได้</div>
   <div class="bar" aria-hidden="true"><i id="bar"></i></div>
   <div class="btns">
@@ -451,14 +448,96 @@ function shade(hex, j) { tmpC.setHex(hex); const f = 1 + (rnd() - 0.5) * j; tmpC
 solids.forEach((b, i) => { b.mesh = solidMesh; b.idx = i; solidMesh.setColorAt(i, shade(b.color, 0.12)); });
 glows.forEach((b, i) => { b.mesh = glowMesh; b.idx = i; tmpC.setHex(b.color).multiplyScalar(1.35); glowMesh.setColorAt(i, tmpC); });
 [solidMesh, glowMesh].forEach(m => m.instanceColor.needsUpdate = true);
+
+// LEGO studs on every block whose top is open
+const studGeo = new THREE.CylinderGeometry(0.27, 0.27, 0.2, 14);
+const kk = (x, y, z) => Math.round(x * 100) + ',' + Math.round(y * 100) + ',' + Math.round(z * 100);
+const occupied = new Set(all.map(b => kk(b.x, b.y, b.z)));
+const studded = solids.filter(b => !occupied.has(kk(b.x, b.y + b.size, b.z)));
+const studMesh = new THREE.InstancedMesh(studGeo, solidMat, studded.length);
+studMesh.castShadow = true; studMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+studded.forEach((b, i) => { b.stud = i; const c = new THREE.Color(); solidMesh.getColorAt(b.idx, c); studMesh.setColorAt(i, c); });
+studMesh.instanceColor.needsUpdate = true;
+scene.add(studMesh);
 const twinkles = glows.filter(b => b.stage === 2);
 
 function place(b, yOff, s) {
   const k = s * b.size;
   tmpM.makeScale(k, k, k).setPosition(b.x, b.y + yOff, b.z);
   b.mesh.setMatrixAt(b.idx, tmpM);
+  if (b.stud !== undefined) {
+    tmpM.makeScale(k, k, k).setPosition(b.x, b.y + yOff + 0.52 * k, b.z);
+    studMesh.setMatrixAt(b.stud, tmpM);
+  }
 }
-function hideAll() { all.forEach(b => b.mesh.setMatrixAt(b.idx, zero)); solidMesh.instanceMatrix.needsUpdate = glowMesh.instanceMatrix.needsUpdate = true; }
+function hideAll() {
+  all.forEach(b => { b.mesh.setMatrixAt(b.idx, zero); if (b.stud !== undefined) studMesh.setMatrixAt(b.stud, zero); });
+  solidMesh.instanceMatrix.needsUpdate = glowMesh.instanceMatrix.needsUpdate = studMesh.instanceMatrix.needsUpdate = true;
+}
+
+/* ---------- opening: a LEGO QR code builds itself, then bursts into the scene ---------- */
+const QR_ROWS = '00000000000000000000000000000000000|01111111010100101101000010011111110|01000001000000110001110101010000010|01011101001011011111011111010111010|01011101011010000110000011010111010|01011101011101100110100000010111010|01000001011110011001010101010000010|01111111010101010101010101011111110|00000000011010010011111000000000000|01000101111111001110001001111110010|00111100100101001111000010100011100|00111011101001111101001111000010100|00011110011100101100101011010000010|01001001001011101100101001010110100|01110010011100010001111110111011000|01110101010011101001010011111010100|01111110110001011110001100110000000|01111011010100110110101100010111100|01011010001011000101000010100011010|01001101110010111010010011101010100|00110000001010000011001110111000110|01100111000111001001111100010010100|01010000000001110100100110001011100|00011101010001100110101110000100100|00010100010111100011111000110010100|01100111011001111010011101111110110|00000000011001011011000001000101100|01111111011100011101010101010110100|01000001000111001000111101000100000|01011101011100110100011001111110100|01011101001111110001111101011101000|01011101001000101000011101011100000|01000001000011001111001011000000000|01111111010010110110011011100000010|00000000000000000000000000000000000'.split('|');
+const QN = QR_ROWS.length, QY = 5, QZ = 4;
+const qrBricks = [];
+QR_ROWS.forEach((row, r) => [...row].forEach((v, c) => qrBricks.push({
+  x: c - (QN - 1) / 2, y: QY + (QN - 1 - r), z: QZ, dark: v === '1',
+  t: (QN - 1 - r) * 120 + Math.random() * 260,
+  vel: new THREE.Vector3((Math.random() - .5) * 26, 6 + Math.random() * 16, 8 + Math.random() * 18),
+  spin: new THREE.Vector3(Math.random() * 8, Math.random() * 8, Math.random() * 8),
+})));
+const qrMesh = new THREE.InstancedMesh(geo, solidMat, qrBricks.length);
+const qrStudGeo = studGeo.clone(); qrStudGeo.rotateX(Math.PI / 2);
+const qrStuds = new THREE.InstancedMesh(qrStudGeo, solidMat, qrBricks.length);
+qrBricks.forEach((b, i) => {
+  tmpC.setHex(b.dark ? pick([0x1a7a40, 0x1f8a4c, 0x1a7a40]) : pick([0xffffff, 0xf6f6f0]));
+  qrMesh.setColorAt(i, tmpC); qrStuds.setColorAt(i, tmpC);
+  qrMesh.setMatrixAt(i, zero); qrStuds.setMatrixAt(i, zero);
+});
+[qrMesh, qrStuds].forEach(m => { m.castShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.instanceColor.needsUpdate = true; scene.add(m); });
+const QR_BUILD = (QN - 1) * 120 + 260 + 520, QR_HOLD = 2200, QR_BURST = 1300;
+let qrT = -1, qrClicked = 0;
+const tq = new THREE.Quaternion(), te = new THREE.Euler(), tv = new THREE.Vector3(), ts = new THREE.Vector3();
+function setQR(i, b, x, y, z, s, rot) {
+  te.set(rot ? rot.x : 0, rot ? rot.y : 0, rot ? rot.z : 0); tq.setFromEuler(te);
+  ts.set(s, s, s); tv.set(x, y, z);
+  tmpM.compose(tv, tq, ts); qrMesh.setMatrixAt(i, tmpM);
+  tv.set(0, 0, 0.52).applyQuaternion(tq).multiplyScalar(s).add(new THREE.Vector3(x, y, z));
+  tmpM.compose(tv, tq, ts); qrStuds.setMatrixAt(i, tmpM);
+}
+function startQR() {
+  hideAll(); candles.children.forEach(c => c.scale.setScalar(0.001));
+  quizEl.hidden = true; el('title').classList.remove('show');
+  el('replay').hidden = true; el('fast').hidden = true;
+  building = false; finished = false; qrT = 0; qrClicked = 0;
+  controls.autoRotate = false; frameCamera(); treeGlow.visible = false;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { qrT = -1; qrHide(); controls.autoRotate = true; treeGlow.visible = true; startBuild(); }
+}
+function qrHide() { qrBricks.forEach((b, i) => { qrMesh.setMatrixAt(i, zero); qrStuds.setMatrixAt(i, zero); }); qrMesh.instanceMatrix.needsUpdate = qrStuds.instanceMatrix.needsUpdate = true; }
+function updateQR(dt) {
+  qrT += dt;
+  const burstT = qrT - QR_BUILD - QR_HOLD;
+  let landed = 0;
+  qrBricks.forEach((b, i) => {
+    if (burstT > 0) {
+      const u = burstT / 1000;
+      const s = Math.max(0.001, 1 - burstT / QR_BURST);
+      setQR(i, b, b.x + b.vel.x * u, b.y + b.vel.y * u - 9 * u * u, b.z + b.vel.z * u, s, b.spin.clone().multiplyScalar(u));
+      return;
+    }
+    const p = (qrT - b.t) / DROP;
+    if (p <= 0) { qrMesh.setMatrixAt(i, zero); qrStuds.setMatrixAt(i, zero); return; }
+    if (p >= 1) { setQR(i, b, b.x, b.y, b.z, 1); landed++; return; }
+    const e = easeOutBack(p);
+    setQR(i, b, b.x, b.y + (1 - e) * HEIGHT, b.z, 0.4 + 0.6 * Math.min(1, p * 1.6));
+  });
+  if (landed > qrClicked) { click(450 + landed % 7 * 60); qrClicked = landed; }
+  qrMesh.instanceMatrix.needsUpdate = qrStuds.instanceMatrix.needsUpdate = true;
+  if (burstT <= 0) {
+    stepEl.textContent = landed < qrBricks.length ? 'กำลังต่อเลโก้ QR code… 🧱' : 'QR code เลโก้เสร็จแล้ว! ✨';
+    barEl.style.width = (landed / qrBricks.length * 100).toFixed(1) + '%';
+  }
+  if (burstT > QR_BURST) { qrT = -1; qrHide(); controls.autoRotate = true; treeGlow.visible = true; startBuild(); }
+}
 
 // floating candles (appear at the end)
 const candles = new THREE.Group();
@@ -598,11 +677,9 @@ function chime() {
 }
 
 function startBuild() {
-  try { initAudio(); ac.resume(); startMusic(); } catch (e) { ac = null; }
   hideAll();
   candles.children.forEach(c => c.scale.setScalar(0.001));
   building = true; finished = false; buildT = 0; speed = 1; doneCount = 0; active = []; qi = 0;
-  el('intro').classList.add('hide');
   quizEl.hidden = true;
   el('title').classList.remove('show');
   el('replay').hidden = true; el('fast').hidden = false;
@@ -638,10 +715,16 @@ function updateBuild(dt) {
   }
 }
 
-el('start').addEventListener('click', startBuild);
-el('replay').addEventListener('click', startBuild);
+el('replay').addEventListener('click', startQR);
+// browsers only allow sound after a tap, so the first tap anywhere starts the music
+function unlockAudio() {
+  try { initAudio(); ac.resume(); startMusic(); } catch (e) { return; }
+  el('tap').hidden = true;
+  removeEventListener('pointerdown', unlockAudio); removeEventListener('keydown', unlockAudio);
+}
+addEventListener('pointerdown', unlockAudio); addEventListener('keydown', unlockAudio);
 el('fast').addEventListener('click', () => { speed = speed === 1 ? 3 : 1; el('fast').textContent = speed === 1 ? '⏩ เร่ง' : '▶️ ปกติ'; });
-el('sound').addEventListener('click', e => { soundOn = !soundOn; if (master) master.gain.setTargetAtTime(soundOn ? 0.9 : 0, ac.currentTime, 0.05); e.currentTarget.textContent = soundOn ? '🔊' : '🔇'; e.currentTarget.setAttribute('aria-pressed', soundOn); });
+el('sound').addEventListener('click', e => { soundOn = !soundOn; if (master && ac) master.gain.setTargetAtTime(soundOn ? 0.9 : 0, ac.currentTime, 0.05); e.currentTarget.textContent = soundOn ? '🔊' : '🔇'; e.currentTarget.setAttribute('aria-pressed', soundOn); });
 
 hideAll();
 
@@ -735,7 +818,8 @@ function updateBursts(dt) {
 /* ---------- loop ---------- */
 let last = performance.now(), finishT = 0, twinkleAcc = 0;
 function loop(now) {
-  const dt = Math.min(50, now - last); last = now;
+  const dt = Math.max(0, Math.min(50, now - last)); last = now;
+  if (qrT >= 0) updateQR(dt);
   if (building) updateBuild(dt);
   if (bursts.length) updateBursts(dt);
   if (finished) {
@@ -771,6 +855,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+startQR();
 
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
