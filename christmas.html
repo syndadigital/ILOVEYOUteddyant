@@ -38,6 +38,7 @@
     filter: drop-shadow(0 2px 12px rgba(242, 193, 78, .45));
   }
   .title .to { font-family: "Cinzel Decorative", "Mitr", serif; color: var(--gold); font-size: clamp(15px, 4vw, 22px); }
+  .title .hny { font-family: "Cinzel Decorative", serif; font-weight: 700; font-size: clamp(15px, 3.6vw, 26px); color: var(--silver); letter-spacing: .04em; margin-top: 2px; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
   .title p { margin: 6px 0 0; color: var(--silver); font-size: clamp(13px, 3.4vw, 17px); text-shadow: 0 1px 8px #000; }
 
   .hud {
@@ -97,6 +98,19 @@
   .wish .sign { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
   .tap { font-size: 14px; padding: 8px 16px; border-radius: 99px; box-shadow: none; background: rgba(242,193,78,.18); border: 1px solid var(--gold); animation: bob 1.6s ease-in-out infinite; }
   @keyframes bob { 50% { transform: translateY(-4px); } }
+  .joy { position: fixed; left: max(20px, env(safe-area-inset-left)); bottom: calc(env(safe-area-inset-bottom, 0px) + 150px);
+    width: 128px; height: 128px; border-radius: 50%; background: rgba(8,14,30,.45); border: 2px solid var(--line);
+    touch-action: none; z-index: 4; backdrop-filter: blur(4px); }
+  .joy[hidden] { display: none; }
+  .joy .knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #3fbf73, var(--green-deep)); border: 2px solid var(--silver);
+    box-shadow: 0 4px 12px rgba(0,0,0,.5); pointer-events: none; }
+  .score { position: fixed; right: max(16px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top, 0px) + 165px);
+    background: var(--panel); border: 1px solid var(--gold); color: var(--gold); border-radius: 99px; padding: 8px 16px;
+    font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; z-index: 4; }
+  .score[hidden] { display: none; }
+  .score.bump { animation: bump .35s ease; }
+  @keyframes bump { 50% { transform: scale(1.25); } }
   .err { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 </style>
 </head>
@@ -105,6 +119,7 @@
 
 <div class="title" id="title">
   <h1>Merry Christmas</h1>
+  <div class="hny">&amp; Happy New Year 2027</div>
   <p class="to" id="to" hidden></p>
   <p id="msg">Wishing you a magical Christmas full of warm hugs &amp; twinkling lights ✨</p>
 </div>
@@ -112,6 +127,9 @@
 
 
 <div class="quiz" id="quiz" hidden><div class="qcard" id="qcard"></div></div>
+
+<div class="joy" id="joy" hidden aria-label="จอยสติ๊กบังคับน้องหมี"><div class="knob" id="knob"></div></div>
+<div class="score" id="score" hidden>⭐ 0/10</div>
 
 <div class="hud">
   <button class="tap" id="tap" type="button">🎶 แตะหน้าจอเพื่อเปิดเพลง</button>
@@ -263,9 +281,11 @@ for (const c of shellCells) {
 
 // 3 — teddy bears in green & silver wizard robes
 // small chibi teddy, built from mini blocks (size Q) for a rounder, cuter look
-function bear(ox, oz, fur, wandSide) {
-  const S = 3, Q = 0.36;
-  const P = (x, y, z, col, glow) => put(+(ox + x * Q).toFixed(3), +(0.5 + Q / 2 + (y - 1) * Q).toFixed(3), +(oz + z * Q).toFixed(3), col, S, glow, Q);
+function bear(ox, oz, fur, wandSide, sink, Q = 0.36) {
+  const S = 3;
+  const P = sink
+    ? (x, y, z, col, glow) => sink.set(x + ',' + y + ',' + z, { x: x * Q, y: 0.5 + Q / 2 + (y - 1) * Q, z: z * Q, col, glow })
+    : (x, y, z, col, glow) => put(+(ox + x * Q).toFixed(3), +(0.5 + Q / 2 + (y - 1) * Q).toFixed(3), +(oz + z * Q).toFixed(3), col, S, glow, Q);
   const inE = (x, y, z, cx, cy, cz, rx, ry, rz) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 + ((z - cz) / rz) ** 2 <= 1;
   // feet with tan pads
   for (const sx of [-1, 1]) for (let x = 1; x <= 3; x++) for (let y = 1; y <= 2; y++) for (let z = -1; z <= 2; z++) {
@@ -509,7 +529,8 @@ function startQR() {
   quizEl.hidden = true; el('title').classList.remove('show');
   el('replay').hidden = true; el('fast').hidden = true;
   building = false; finished = false; qrT = 0; qrClicked = 0;
-  controls.autoRotate = false; frameCamera(); treeGlow.visible = false;
+  endGameCleanup();
+  controls.autoRotate = false; controls.target.set(0, 13, -2); frameCamera(); treeGlow.visible = false;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { qrT = -1; qrHide(); controls.autoRotate = true; treeGlow.visible = true; startBuild(); }
 }
 function qrHide() { qrBricks.forEach((b, i) => { qrMesh.setMatrixAt(i, zero); qrStuds.setMatrixAt(i, zero); }); qrMesh.instanceMatrix.needsUpdate = qrStuds.instanceMatrix.needsUpdate = true; }
@@ -711,7 +732,7 @@ function updateBuild(dt) {
     el('fast').hidden = true; el('replay').hidden = false;
     chime();
     fireworks(4);
-    startQuiz();
+    setTimeout(() => { if (finished) startGame(); }, 1500);
   }
 }
 
@@ -815,6 +836,174 @@ function updateBursts(dt) {
   }
 }
 
+/* ---------- mini game: walk little Teddy, collect 10 stars & gifts ---------- */
+const GOAL = 10;
+let game = null;
+const joyEl = el('joy'), knob = el('knob'), scoreEl = el('score');
+const joyV = { x: 0, y: 0 }, keys = {};
+addEventListener('keydown', e => { keys[e.code.toLowerCase()] = true; if (game && e.key.startsWith('Arrow')) e.preventDefault(); });
+addEventListener('keyup', e => { keys[e.code.toLowerCase()] = false; });
+joyEl.addEventListener('pointerdown', e => { joyEl.setPointerCapture(e.pointerId); moveJoy(e); });
+joyEl.addEventListener('pointermove', e => { if (joyEl.hasPointerCapture(e.pointerId)) moveJoy(e); });
+const endJoy = () => { joyV.x = joyV.y = 0; knob.style.transform = ''; };
+joyEl.addEventListener('pointerup', endJoy); joyEl.addEventListener('pointercancel', endJoy);
+function moveJoy(e) {
+  const r = joyEl.getBoundingClientRect(), R = r.width / 2;
+  let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R);
+  const d = Math.hypot(dx, dy), m = R - 20;
+  if (d > m) { dx *= m / d; dy *= m / d; }
+  knob.style.transform = `translate(${dx}px, ${dy}px)`;
+  joyV.x = dx / m; joyV.y = dy / m;
+}
+
+// the player bear: a smaller cream teddy built from the same recipe
+const player = new THREE.Group();
+{
+  const vox = new Map();
+  bear(0, 0, 0xe3c39a, 1, vox, 0.24);
+  const list = [...vox.values()], sol = list.filter(v => !v.glow), gl = list.filter(v => v.glow);
+  const pm = new THREE.InstancedMesh(geo, solidMat, sol.length), gm = new THREE.InstancedMesh(geo, glowMat, Math.max(1, gl.length));
+  const k = 0.24;
+  sol.forEach((v, i) => { tmpM.makeScale(k, k, k).setPosition(v.x, v.y, v.z); pm.setMatrixAt(i, tmpM); pm.setColorAt(i, shade(v.col, 0.1)); });
+  gl.forEach((v, i) => { tmpM.makeScale(k, k, k).setPosition(v.x, v.y, v.z); gm.setMatrixAt(i, tmpM); gm.setColorAt(i, tmpC.setHex(v.col).multiplyScalar(1.3)); });
+  pm.castShadow = true;
+  const body = new THREE.Group(); body.add(pm, gm); player.add(body); player.userData.body = body;
+  // a soft glow ring under little Teddy so it's easy to spot
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.4, 32), new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: .55 }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.53; player.add(ring);
+}
+{ const pl = new THREE.PointLight(0xffe2b0, 0.6, 7, 2); pl.position.set(0, 3.5, 2.5); player.add(pl); }
+player.visible = false; scene.add(player);
+
+// obstacles as circles [x, z, r]
+const OBST = [[0, 0, 7.8], [-7, 10, 2.3], [7, 10, 2.3], [-15, 15, 1], [15, 15, 1], [-4, 4, 1.8], [4, 4, 2], [-2.5, 6.5, 1.3], [2.5, 7.5, 1.3], [5.5, -.5, 1.3], [-6.5, -.5, 1.3]];
+function blocked(x, z) {
+  if (Math.hypot(x, z * 0.95) > 23.5) return true;
+  if (z < -10 && Math.abs(x) < 18.5) return true; // castle mound
+  return OBST.some(([ox, oz, r]) => Math.hypot(x - ox, z - oz) < r + 0.9);
+}
+
+function makeItem(kind) {
+  const g = new THREE.Group();
+  if (kind === 'star') {
+    const m = new THREE.InstancedMesh(geo, glowMat, starPts.length);
+    starPts.forEach(([sx, sy], i) => { tmpM.makeScale(.3, .3, .3).setPosition(sx * .3, sy * .3, 0); m.setMatrixAt(i, tmpM); m.setColorAt(i, tmpC.setHex(sx || sy ? 0xf2c14e : 0xfff6cc).multiplyScalar(1.3)); });
+    g.add(m);
+  } else {
+    const col = pick([[C.sGreen, C.silver], [C.red, C.gold], [C.silver, C.sGreen], [C.gold, C.red]]);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.1, 1.1), new THREE.MeshStandardMaterial({ color: col[0], roughness: .6 }));
+    const rib = new THREE.MeshStandardMaterial({ color: col[1], roughness: .4, emissive: col[1], emissiveIntensity: .25 });
+    const r1 = new THREE.Mesh(new THREE.BoxGeometry(1.14, 1.14, .25), rib), r2 = new THREE.Mesh(new THREE.BoxGeometry(.25, 1.14, 1.14), rib);
+    const bow = new THREE.Mesh(new THREE.BoxGeometry(.5, .3, .5), rib); bow.position.y = .7;
+    box.castShadow = true; g.add(box, r1, r2, bow);
+  }
+  return g;
+}
+function spawnItems() {
+  const items = [];
+  let tries = 0;
+  while (items.length < GOAL && tries++ < 2000) {
+    const a = Math.random() * Math.PI * 2, r = 5 + Math.random() * 18;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (blocked(x, z) || Math.hypot(x, z - 16) < 3 || items.some(it => Math.hypot(it.x - x, it.z - z) < 4)) continue;
+    const kind = items.length % 2 ? 'gift' : 'star';
+    const mesh = makeItem(kind);
+    mesh.position.set(x, 1.6, z); mesh.scale.setScalar(0.001); scene.add(mesh);
+    items.push({ x, z, kind, mesh, got: false, t: 0, ph: Math.random() * 6, born: items.length * 120 });
+  }
+  return items;
+}
+
+function startGame() {
+  endGameCleanup();
+  game = { items: spawnItems(), score: 0, t: 0, done: false, walk: 0 };
+  player.position.set(0, 0, 16); player.rotation.y = 0; player.scale.setScalar(0.001); player.visible = true;
+  controls.autoRotate = false;
+  controls.minDistance = 14; controls.maxDistance = 60;
+  joyEl.hidden = false; scoreEl.hidden = false; scoreEl.textContent = `⭐ 0/${GOAL}`;
+  stepEl.textContent = '🎮 พาน้องหมีเก็บดาวกับของขวัญให้ครบ 10 ชิ้น! (จอย หรือ WASD / ลูกศร)';
+  barEl.style.width = '0%';
+  if (ac && soundOn) [72, 76, 79, 84].forEach((m, i) => bell(m + 12, ac.currentTime + i * 0.09, 0.08, 0.9));
+}
+function endGameCleanup() {
+  if (game) game.items.forEach(it => scene.remove(it.mesh));
+  game = null; player.visible = false; joyEl.hidden = true; scoreEl.hidden = true; endJoy();
+  controls.minDistance = 25; controls.maxDistance = 95;
+}
+const camFwd = new THREE.Vector3(), camRight = new THREE.Vector3(), mv = new THREE.Vector3();
+function updateGame(dt) {
+  const g = game, s = dt / 1000;
+  g.t += dt;
+  player.scale.setScalar(Math.min(1, g.t / 400) || 0.001);
+  // input: joystick or keyboard, relative to the camera
+  let ix = joyV.x, iy = joyV.y;
+  if (keys['keya'] || keys['arrowleft']) ix -= 1;
+  if (keys['keyd'] || keys['arrowright']) ix += 1;
+  if (keys['keyw'] || keys['arrowup']) iy -= 1;
+  if (keys['keys'] || keys['arrowdown']) iy += 1;
+  const len = Math.hypot(ix, iy);
+  if (len > 1) { ix /= len; iy /= len; }
+  camera.getWorldDirection(camFwd); camFwd.y = 0; camFwd.normalize();
+  camRight.crossVectors(camFwd, new THREE.Vector3(0, 1, 0));
+  mv.set(0, 0, 0).addScaledVector(camFwd, -iy).addScaledVector(camRight, ix);
+  const moving = !g.done && mv.lengthSq() > 0.01;
+  const body = player.userData.body;
+  if (moving) {
+    const sp = 7 * s, p = player.position;
+    const nx = p.x + mv.x * sp, nz = p.z + mv.z * sp;
+    if (!blocked(nx, nz)) { p.x = nx; p.z = nz; }
+    else if (!blocked(nx, p.z)) p.x = nx;
+    else if (!blocked(p.x, nz)) p.z = nz;
+    const want = Math.atan2(mv.x, mv.z);
+    let d = want - player.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
+    player.rotation.y += d * Math.min(1, s * 12);
+    g.walk += s * 14;
+    body.position.y = Math.abs(Math.sin(g.walk)) * 0.35;
+    body.rotation.z = Math.sin(g.walk) * 0.12;
+    if (Math.sin(g.walk) * Math.sin(g.walk - s * 14) < 0) click(380);
+  } else {
+    body.position.y *= 0.8; body.rotation.z *= 0.8;
+  }
+  // camera follows little Teddy
+  const tgt = player.position.clone().add(new THREE.Vector3(0, 3, 0));
+  const delta = tgt.clone().sub(controls.target).multiplyScalar(Math.min(1, s * 4));
+  controls.target.add(delta); camera.position.add(delta);
+  if (g.t < 1800) { // swoop the camera in close behind little Teddy
+    const want = player.position.clone().add(new THREE.Vector3(0, 8, 15));
+    camera.position.lerp(want, Math.min(1, s * 2.5));
+  }
+  // items
+  g.items.forEach(it => {
+    it.t += dt;
+    if (it.got) {
+      const u = (it.t - it.gotAt) / 450;
+      it.mesh.scale.setScalar(Math.max(0.001, 1 + u * 0.8) * (u < 1 ? 1 : 0.001));
+      it.mesh.position.y += s * 8;
+      if (u >= 1) it.mesh.visible = false;
+      return;
+    }
+    const pop = Math.min(1, Math.max(0, (it.t - it.born) / 500));
+    it.mesh.scale.setScalar(Math.max(0.001, easeOutBack(pop)));
+    it.mesh.rotation.y += s * 1.8;
+    it.mesh.position.y = 1.6 + Math.sin(it.t / 400 + it.ph) * 0.3;
+    if (!g.done && Math.hypot(player.position.x - it.x, player.position.z - it.z) < 1.8) {
+      it.got = true; it.gotAt = it.t; g.score++;
+      scoreEl.textContent = `⭐ ${g.score}/${GOAL}`;
+      scoreEl.classList.remove('bump'); void scoreEl.offsetWidth; scoreEl.classList.add('bump');
+      barEl.style.width = (g.score / GOAL * 100) + '%';
+      if (ac && soundOn) [0, 4, 7].forEach((m, i) => bell(84 + m + g.score, ac.currentTime + i * 0.06, 0.1, 1));
+      if (g.score >= GOAL) winGame();
+    }
+  });
+}
+function winGame() {
+  game.done = true;
+  stepEl.textContent = 'เก่งมาก! เก็บครบ 10 ชิ้นแล้ว 🎉';
+  joyEl.hidden = true; endJoy();
+  fireworks(10); chime();
+  setTimeout(startQuiz, 600);
+}
+
 /* ---------- loop ---------- */
 let last = performance.now(), finishT = 0, twinkleAcc = 0;
 function loop(now) {
@@ -850,6 +1039,7 @@ function loop(now) {
   }
   snowGeo.attributes.position.needsUpdate = true;
   treeGlow.intensity = 0.85 + Math.sin(now / 400) * 0.1;
+  if (game) updateGame(dt);
   controls.update();
   composer.render();
   requestAnimationFrame(loop);
