@@ -70,6 +70,31 @@
   .intro.hide .card { opacity: 0; transform: scale(.94); pointer-events: none; }
   .intro h2 { margin: 0 0 6px; font-family: "Cinzel Decorative", serif; color: var(--gold); font-size: 26px; }
   .intro p { margin: 0 0 18px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .quiz { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; z-index: 5; }
+  .quiz[hidden] { display: none; }
+  .qcard {
+    width: min(420px, 100%); max-height: calc(100% - 24px); overflow-y: auto; text-align: center;
+    padding: 24px 22px; border-radius: 24px; background: rgba(8, 14, 30, 0.82);
+    border: 1px solid var(--line); backdrop-filter: blur(8px);
+    box-shadow: 0 20px 60px rgba(0,0,0,.45); animation: pop .45s cubic-bezier(.2,.9,.3,1.3);
+  }
+  @keyframes pop { from { opacity: 0; transform: scale(.85) translateY(16px); } to { opacity: 1; transform: none; } }
+  .qcard .bear { font-size: 40px; line-height: 1; }
+  .qcard .count { font-size: 12px; letter-spacing: .18em; color: var(--muted); text-transform: uppercase; margin: 8px 0 4px; }
+  .qcard h3 { margin: 0 0 16px; font-size: 20px; font-weight: 500; line-height: 1.35; text-wrap: balance; }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .opts button { padding: 14px 10px; font-size: 15px; border-radius: 16px; box-shadow: 0 3px 0 #062615; background: rgba(31,138,76,.25); border: 1.5px solid var(--line); }
+  .opts button:hover, .opts button:focus-visible { background: rgba(31,138,76,.55); border-color: var(--silver); outline: none; }
+  .opts button .e { display: block; font-size: 26px; margin-bottom: 4px; }
+  .dots { display: flex; justify-content: center; gap: 6px; margin-top: 16px; }
+  .dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.2); }
+  .dots i.on { background: var(--gold); }
+  .wish h2 { margin: 6px 0 2px; font-family: "Cinzel Decorative", serif; font-size: clamp(26px, 7vw, 36px); line-height: 1.1;
+    background: linear-gradient(180deg, #fff6d6, var(--gold) 60%, #b8862a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .wish .yr { font-family: "Cinzel Decorative", serif; font-size: clamp(40px, 12vw, 60px); color: var(--gold); line-height: 1; margin: 2px 0 12px; text-shadow: 0 0 24px rgba(242,193,78,.5); }
+  .wish ul { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 8px; text-align: left; }
+  .wish li { background: rgba(255,255,255,.06); border-radius: 12px; padding: 10px 12px; font-size: 15px; line-height: 1.45; }
+  .wish .sign { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
   .err { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 </style>
 </head>
@@ -79,16 +104,18 @@
 <div class="title" id="title">
   <h1>Merry Christmas</h1>
   <p class="to" id="to" hidden></p>
-  <p id="msg">ขอให้คริสต์มาสนี้เต็มไปด้วยเวทมนตร์ ✨</p>
+  <p id="msg">Wishing you a magical Christmas full of warm hugs &amp; twinkling lights ✨</p>
 </div>
 
 <div class="intro" id="intro">
   <div class="card">
     <h2>Magic Blocks</h2>
-    <p>แตะเพื่อเริ่มต่อบล็อกทีละชิ้น<br>ปราสาท • ต้นคริสต์มาส • น้องหมีพ่อมด</p>
+    <p>แตะเพื่อเริ่มต่อบล็อกทีละชิ้น พร้อมเพลงเวทมนตร์ 🎶<br>ปราสาท • ต้นคริสต์มาส • น้องหมีพ่อมด</p>
     <button id="start" type="button">🎄 เริ่มต่อบล็อก</button>
   </div>
 </div>
+
+<div class="quiz" id="quiz" hidden><div class="qcard" id="qcard"></div></div>
 
 <div class="hud">
   <div class="step" id="step">ลากเพื่อหมุนดูรอบ ๆ ได้</div>
@@ -136,8 +163,8 @@ const C = {
 /* ---------- voxel model ---------- */
 const cells = new Map();
 const rnd = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
-function put(x, y, z, color, stage, glow = false) {
-  cells.set(x + ',' + y + ',' + z, { x, y, z, color, stage, glow });
+function put(x, y, z, color, stage, glow = false, size = 1) {
+  cells.set(x + ',' + y + ',' + z, { x, y, z, color, stage, glow, size });
 }
 const pick = arr => arr[Math.floor(rnd() * arr.length)];
 
@@ -238,57 +265,82 @@ for (const c of shellCells) {
 }
 
 // 3 — teddy bears in green & silver wizard robes
+// small chibi teddy, built from mini blocks (size Q) for a rounder, cuter look
 function bear(ox, oz, fur, wandSide) {
-  const S = 3;
-  const P = (x, y, z, col, glow) => put(ox + x, y, oz + z, col, S, glow);
-  for (const sx of [-2, -1, 1, 2]) for (let z = -1; z <= 1; z++) P(sx, 1, z, fur);
-  P(-2, 1, 2, C.muzzle); P(-1, 1, 2, fur); P(1, 1, 2, fur); P(2, 1, 2, C.muzzle);
-  // robe (flared hem)
-  for (let x = -3; x <= 3; x++) for (let z = -2; z <= 2; z++) P(x, 2, z, z === 2 && Math.abs(x) <= 1 ? C.sGreen : C.robe);
-  for (let y = 3; y <= 6; y++) for (let x = -2; x <= 2; x++) for (let z = -1; z <= 1; z++) P(x, y, z, pick([C.robe, C.robe2]));
-  for (let y = 3; y <= 6; y++) P(0, y, 1, y >= 4 ? C.shirt : C.sGreen);
-  for (let y = 4; y <= 6; y++) P(0, y, 2, y % 2 ? C.sGreen : C.sSilver); // striped tie
-  P(-1, 6, 1, C.sGreen); P(1, 6, 1, C.sGreen); P(-1, 5, 1, C.sGreen); P(1, 5, 1, C.sGreen); // green lining
-  P(-2, 4, 2, C.sGreen); P(-2, 5, 2, C.sSilver); // house badge
-  // sleeves + paws
-  for (const sx of [-3, 3]) {
-    for (let y = 3; y <= 6; y++) P(sx, y, 0, C.robe);
-    P(sx, 3, 1, C.sGreen); P(sx, 2, 1, fur);
+  const S = 3, Q = 0.36;
+  const P = (x, y, z, col, glow) => put(+(ox + x * Q).toFixed(3), +(0.5 + Q / 2 + (y - 1) * Q).toFixed(3), +(oz + z * Q).toFixed(3), col, S, glow, Q);
+  const inE = (x, y, z, cx, cy, cz, rx, ry, rz) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 + ((z - cz) / rz) ** 2 <= 1;
+  // feet with tan pads
+  for (const sx of [-1, 1]) for (let x = 1; x <= 3; x++) for (let y = 1; y <= 2; y++) for (let z = -1; z <= 2; z++) {
+    if ((x === 1 || x === 3) && (z === -1 || z === 2) && y === 2) continue;
+    P(sx * x, y, z, z === 2 && y === 1 ? C.muzzle : fur);
+  }
+  // robe: round body with flared hem
+  for (let y = 2; y <= 8; y++) for (let x = -5; x <= 5; x++) for (let z = -4; z <= 4; z++) {
+    const r = y <= 3 ? 4.6 : 3.7;
+    if (!inE(x, 0, z, 0, 0, 0, r, 1, r * 0.82)) continue;
+    P(x, y, z, pick([C.robe, C.robe2]));
+  }
+  for (let y = 4; y <= 8; y++) P(0, y, 3, C.shirt);
+  for (let y = 4; y <= 8; y++) P(0, y, 4, y % 2 ? C.sGreen : C.sSilver); // striped tie
+  for (let y = 5; y <= 8; y++) { P(-1, y, 3, C.sGreen); P(1, y, 3, C.sGreen); } // green lining
+  P(-2, 6, 3, C.sSilver); P(-2, 5, 3, C.sGreen); // house badge
+  for (let x = -4; x <= 4; x++) P(x, 2, 3, x % 2 ? C.sGreen : C.robe); // hem trim
+  // stubby arms + paws
+  for (const sx of [-1, 1]) {
+    for (let y = 5; y <= 7; y++) for (let z = -1; z <= 1; z++) P(sx * 4, y, z, C.robe);
+    P(sx * 5, 5, 0, C.robe); P(sx * 5, 4, 1, C.sGreen);
+    P(sx * 5, 3, 1, fur); P(sx * 5, 3, 2, fur); P(sx * 4, 4, 1, fur);
   }
   // wand
-  const wx = wandSide * 3;
-  P(wx, 2, 2, C.wood); P(wx, 2, 3, C.wood); P(wx, 3, 4, C.wood);
-  P(wx, 4, 5, 0x9dffc8, true);
-  // striped scarf
-  for (let x = -3; x <= 3; x++) for (let z = -2; z <= 2; z++) {
-    if (Math.abs(x) < 3 && Math.abs(z) < 2) continue;
-    P(x, 7, z, (x + z) % 2 === 0 ? C.sGreen : C.sSilver);
+  const wx = wandSide * 5;
+  P(wx, 4, 3, C.wood); P(wx, 5, 4, C.wood); P(wx, 6, 5, C.wood);
+  P(wx, 7, 6, 0x9dffc8, true);
+  // striped scarf + tail
+  for (let x = -4; x <= 4; x++) for (let z = -4; z <= 4; z++) {
+    if (!inE(x, 0, z, 0, 0, 0, 4.4, 1, 3.8) || inE(x, 0, z, 0, 0, 0, 3.2, 1, 2.6)) continue;
+    P(x, 9, z, (x + z + 40) % 2 ? C.sGreen : C.sSilver);
   }
-  for (let y = 3; y <= 6; y++) P(-wandSide * 2, y, 2, y % 2 ? C.sSilver : C.sGreen);
-  // head
-  for (let y = 8; y <= 11; y++) for (let x = -2; x <= 2; x++) for (let z = -2; z <= 1; z++) P(x, y, z, fur);
-  for (let x = -1; x <= 1; x++) for (const y of [8, 9]) P(x, y, 2, C.muzzle);
-  P(0, 9, 3, C.black); P(0, 8, 2, 0x6b3a2a);
-  P(-1, 10, 2, C.black); P(1, 10, 2, C.black);
-  P(-2, 9, 2, C.blush); P(2, 9, 2, C.blush);
+  for (let y = 5; y <= 8; y++) P(-wandSide * 2, y, 4, y % 2 ? C.sSilver : C.sGreen);
+  // big round head
+  const front = {};
+  for (let y = 10; y <= 18; y++) for (let x = -6; x <= 6; x++) for (let z = -5; z <= 5; z++) {
+    if (!inE(x, y, z, 0, 14, 0, 6.2, 4.6, 4.8)) continue;
+    P(x, y, z, fur);
+    const k = x + ',' + y; front[k] = Math.max(front[k] ?? -99, z);
+  }
+  const F = (x, y, col, out = 0, glow) => P(x, y, (front[x + ',' + y] ?? 4) + out, col, glow);
+  // muzzle, nose, mouth
+  for (let x = -2; x <= 2; x++) for (let y = 11; y <= 13; y++) {
+    if (Math.abs(x) === 2 && y !== 12) continue;
+    F(x, y, C.muzzle, 1);
+  }
+  F(-1, 13, C.black, 2); F(0, 13, C.black, 2); F(1, 13, C.black, 2); F(0, 12, C.black, 2);
+  F(0, 11, 0x6b3a2a, 2);
+  // sparkly eyes + blush
   for (const sx of [-1, 1]) {
-    P(sx * 2, 12, 0, fur); P(sx * 2, 12, -1, fur); P(sx * 1, 12, -1, fur);
-    P(sx * 2, 13, -1, fur); P(sx * 2, 13, 0, fur); P(sx * 2, 12, 1, C.muzzle);
+    F(sx * 3, 14, C.black, 1); F(sx * 3, 15, C.black, 1);
+    F(sx * 3 - sx, 15, C.black, 1); F(sx * 3 - sx, 14, C.black, 1);
+    F(sx * 3 - sx, 15, 0xffffff, 2, true);
+    F(sx * 4, 12, C.blush, 1); F(sx * 5, 12, C.blush, 0);
   }
-  // pointy wizard hat between the ears, tip bent to one side
-  for (let x = -1; x <= 1; x++) for (let z = -2; z <= 1; z++) P(x, 12, z, C.robe);
-  for (let x = -1; x <= 1; x++) for (let z = -2; z <= 1; z++) {
-    if (Math.abs(x) === 1 && (z === -2 || z === 1)) continue;
-    P(x, 13, z, (x + z) % 2 === 0 ? C.sGreen : C.sSilver);
+  // round ears with tan inside
+  for (const sx of [-1, 1]) for (let x = 3; x <= 6; x++) for (let y = 17; y <= 20; y++) for (let z = -1; z <= 0; z++) {
+    if (!inE(x, y, 0, 4.5, 18.6, 0, 2, 2, 1)) continue;
+    P(sx * x, y, z, z === 0 && Math.abs(x - 4.5) < 1 && y >= 18 && y <= 19 ? C.muzzle : fur);
   }
-  for (let x = -1; x <= 1; x++) for (let z = -1; z <= 0; z++) P(x, 14, z, C.robe2);
-  P(0, 15, -1, C.robe); P(0, 15, 0, C.robe);
-  P(0, 16, -1, C.robe); P(-wandSide, 17, -1, C.robe);
-  P(-wandSide * 2, 17, -1, 0xe8f6ff, true);
-  P(0, 14, 1, 0xe8f6ff, true);
+  for (const sx of [-1, 1]) for (let x = 4; x <= 5; x++) for (let y = 18; y <= 19; y++) P(sx * x, y, 1, C.muzzle);
+  // little wizard hat, tip bent sideways with a glowing pompom
+  for (let x = -3; x <= 3; x++) for (let z = -3; z <= 3; z++) if (inE(x, 0, z, 0, 0, 0, 3.5, 1, 3.5)) P(x, 19, z, C.robe);
+  for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) if (inE(x, 0, z, 0, 0, 0, 2.5, 1, 2.5)) P(x, 20, z, (x + z + 40) % 2 ? C.sGreen : C.sSilver);
+  for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) if (inE(x, 0, z, 0, 0, 0, 2.2, 1, 2.2)) P(x, 21, z, C.robe2);
+  for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) { P(x, 22, z, C.robe); if (!x || !z) P(x, 23, z, C.robe2); }
+  P(0, 24, 0, C.robe); P(-wandSide, 25, 0, C.robe); P(-wandSide * 2, 25, 0, C.robe);
+  P(-wandSide * 3, 24, 0, 0xe8f6ff, true);
+  P(0, 21, 3, 0xffe9a8, true); // tiny star on the hat
 }
-bear(-9, 9, C.fur, 1);
-bear(9, 9, C.fur2, -1);
+bear(-7, 10, C.fur, 1);
+bear(7, 10, C.fur2, -1);
 
 // 4 — gifts + lamp posts
 function gift(cx, cz, w, h, box, ribbon) {
@@ -402,7 +454,8 @@ glows.forEach((b, i) => { b.mesh = glowMesh; b.idx = i; tmpC.setHex(b.color).mul
 const twinkles = glows.filter(b => b.stage === 2);
 
 function place(b, yOff, s) {
-  tmpM.makeScale(s, s, s).setPosition(b.x, b.y + yOff, b.z);
+  const k = s * b.size;
+  tmpM.makeScale(k, k, k).setPosition(b.x, b.y + yOff, b.z);
   b.mesh.setMatrixAt(b.idx, tmpM);
 }
 function hideAll() { all.forEach(b => b.mesh.setMatrixAt(b.idx, zero)); solidMesh.instanceMatrix.needsUpdate = glowMesh.instanceMatrix.needsUpdate = true; }
@@ -457,12 +510,73 @@ const queue = order.flat().sort((a, b) => a.t - b.t);
 const el = id => document.getElementById(id);
 // ?to=ชื่อ&msg=ข้อความ — ใส่ชื่อคนรับและคำอวยพรผ่านลิงก์
 const qs = new URLSearchParams(location.search);
-if (qs.get('to')) { el('to').textContent = 'ถึง ' + qs.get('to').slice(0, 40) + ' 🎄'; el('to').hidden = false; }
+if (qs.get('to')) { el('to').textContent = 'Dear ' + qs.get('to').slice(0, 40) + ' 🎄'; el('to').hidden = false; }
 if (qs.get('msg')) el('msg').textContent = qs.get('msg').slice(0, 120);
 const stepEl = el('step'), barEl = el('bar');
 
+// ---- original music-box waltz in E minor (3/4), plays from the first tap ----
+let ac = null, soundOn = true, lastClick = 0, master = null, verb = null, musicOn = false, nextNote = 0, step = 0;
+const MEL = [ // [midi, beats]
+  [64,1],[66,.5],[67,.5],[71,1], [69,1.5],[67,.5],[66,1], [64,1],[67,1],[72,1], [71,3],
+  [69,1],[72,.5],[71,.5],[69,1], [67,1],[71,1],[64,1], [66,1],[69,1],[63,1], [64,3],
+  [67,1],[69,.5],[71,.5],[74,1], [72,1.5],[71,.5],[69,1], [71,1],[67,1],[64,1], [66,3],
+  [76,1],[74,.5],[72,.5],[71,1], [69,1],[72,1],[64,1], [63,1],[66,1],[71,1], [64,3],
+];
+const CH = [[40,52,55,59],[40,52,55,59],[36,52,55,60],[35,51,54,59],[33,52,57,60],[40,52,55,59],[35,51,54,57],[40,52,55,59],
+            [43,55,59,62],[33,52,57,60],[40,52,55,59],[35,51,54,59],[36,52,55,60],[33,52,57,60],[35,51,54,57],[40,52,55,59]];
+const BEAT = 0.4;
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+function initAudio() {
+  if (ac) return;
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  master = ac.createGain(); master.gain.value = soundOn ? 0.9 : 0; master.connect(ac.destination);
+  verb = ac.createConvolver();
+  const len = ac.sampleRate * 2.6, ir = ac.createBuffer(2, len, ac.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
+  verb.buffer = ir;
+  const wet = ac.createGain(); wet.gain.value = 0.45; verb.connect(wet).connect(master);
+}
+function bell(m, t, vol, dur = 1.6) {
+  const f = hz(m), g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  g.connect(master); g.connect(verb);
+  [[1, 1], [4.0, 0.22], [2.0, 0.3], [6.02, 0.06]].forEach(([mul, a]) => {
+    const o = ac.createOscillator(), og = ac.createGain();
+    o.type = 'sine'; o.frequency.value = f * mul; og.gain.value = a;
+    o.connect(og).connect(g); o.start(t); o.stop(t + dur + 0.05);
+  });
+}
+// flatten melody to timed events once
+const SONG = [];
+{ let t = 0; MEL.forEach(([m, d]) => { SONG.push({ t, m, d }); t += d; }); }
+const LOOP_BEATS = CH.length * 3;
+let loopStart = 0, mi = 0, bar = 0;
+function scheduleMusic() {
+  if (!musicOn || !ac) return;
+  const ahead = ac.currentTime + 0.25;
+  while (true) {
+    const melT = mi < SONG.length ? loopStart + SONG[mi].t * BEAT : Infinity;
+    const barT = bar < CH.length ? loopStart + bar * 3 * BEAT : Infinity;
+    if (melT === Infinity && barT === Infinity) { loopStart += LOOP_BEATS * BEAT; mi = 0; bar = 0; continue; }
+    const t = Math.min(melT, barT);
+    if (t > ahead) break;
+    if (melT <= barT) { const n = SONG[mi++]; bell(n.m + 12, melT, 0.16, Math.max(1.2, n.d * BEAT * 3)); }
+    else {
+      const c = CH[bar++];
+      bell(c[0] + 12, barT, 0.09, 1.4);
+      bell(c[1] + 12, barT + BEAT, 0.05, 0.9); bell(c[2] + 12, barT + BEAT, 0.045, 0.9);
+      bell(c[2] + 12, barT + 2 * BEAT, 0.05, 0.9); bell(c[3] + 12, barT + 2 * BEAT, 0.045, 0.9);
+      if (Math.random() < 0.35) [0, 1, 2, 3].forEach(k => bell([83, 86, 88, 91, 95][Math.floor(Math.random() * 5)] + 12, barT + 1.5 * BEAT + k * 0.07, 0.025, 0.8)); // sparkle
+    }
+  }
+}
+function startMusic() {
+  if (!ac || musicOn) return;
+  musicOn = true; loopStart = ac.currentTime + 0.15; mi = 0; bar = 0;
+  setInterval(scheduleMusic, 90);
+}
+
 // tiny "click" sound for each landing block
-let ac = null, soundOn = true, lastClick = 0;
 function click(pitch) {
   if (!soundOn || !ac) return;
   const now = ac.currentTime;
@@ -470,8 +584,8 @@ function click(pitch) {
   lastClick = now;
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = 'triangle'; o.frequency.value = pitch;
-  g.gain.setValueAtTime(0.06, now); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
-  o.connect(g).connect(ac.destination); o.start(now); o.stop(now + 0.09);
+  g.gain.setValueAtTime(0.025, now); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+  o.connect(g).connect(master); o.start(now); o.stop(now + 0.09);
 }
 function chime() {
   if (!soundOn || !ac) return;
@@ -479,16 +593,17 @@ function chime() {
     const t = ac.currentTime + i * 0.13, o = ac.createOscillator(), g = ac.createGain();
     o.type = 'sine'; o.frequency.value = f;
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
-    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 1.3);
+    o.connect(g).connect(master); o.connect(verb); o.start(t); o.stop(t + 1.3);
   });
 }
 
 function startBuild() {
-  try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); ac.resume(); } catch (e) { ac = null; }
+  try { initAudio(); ac.resume(); startMusic(); } catch (e) { ac = null; }
   hideAll();
   candles.children.forEach(c => c.scale.setScalar(0.001));
   building = true; finished = false; buildT = 0; speed = 1; doneCount = 0; active = []; qi = 0;
   el('intro').classList.add('hide');
+  quizEl.hidden = true;
   el('title').classList.remove('show');
   el('replay').hidden = true; el('fast').hidden = false;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { buildT = total + DROP; }
@@ -518,21 +633,111 @@ function updateBuild(dt) {
     el('title').classList.add('show');
     el('fast').hidden = true; el('replay').hidden = false;
     chime();
+    fireworks(4);
+    startQuiz();
   }
 }
 
 el('start').addEventListener('click', startBuild);
 el('replay').addEventListener('click', startBuild);
 el('fast').addEventListener('click', () => { speed = speed === 1 ? 3 : 1; el('fast').textContent = speed === 1 ? '⏩ เร่ง' : '▶️ ปกติ'; });
-el('sound').addEventListener('click', e => { soundOn = !soundOn; e.currentTarget.textContent = soundOn ? '🔊' : '🔇'; e.currentTarget.setAttribute('aria-pressed', soundOn); });
+el('sound').addEventListener('click', e => { soundOn = !soundOn; if (master) master.gain.setTargetAtTime(soundOn ? 0.9 : 0, ac.currentTime, 0.05); e.currentTarget.textContent = soundOn ? '🔊' : '🔇'; e.currentTarget.setAttribute('aria-pressed', soundOn); });
 
 hideAll();
+
+/* ---------- 3 happy questions + 2027 wish ---------- */
+const QUESTIONS = [
+  { q: 'What made you smile the most this year?', a: [
+    ['🍰', 'Yummy food', 'More cake, more snacks, more "just one more bite" moments 🍰'],
+    ['🤗', 'People I love', 'Lots of hugs from the people who make your heart warm 🤗'],
+    ['🌱', 'Growing a little', 'Tiny steps that turn into big, proud wins 🌱'],
+    ['😴', 'Cozy lazy days', 'Plenty of sleepy Sundays and guilt-free naps 😴'],
+  ] },
+  { q: 'Pick a little magic for 2027', a: [
+    ['😂', 'Big laughs', 'Laughing until your tummy hurts, again and again 😂'],
+    ['💪', 'Good health', 'A strong body, a happy heart and good sleep every night 💪'],
+    ['💰', 'Lucky money', 'A wallet that feels a little heavier every month 💰'],
+    ['✈️', 'New adventures', 'New places, new friends and stories worth telling ✈️'],
+  ] },
+  { q: 'How do you want to feel in 2027?', a: [
+    ['☀️', 'Calm & happy', 'Calm mornings and happy evenings ☀️'],
+    ['🔥', 'Brave & bold', 'The courage to say yes to the things you dream about 🔥'],
+    ['🧸', 'Loved & cozy', 'Feeling loved, wrapped up like a teddy bear hug 🧸'],
+    ['🌈', 'Free & playful', 'Freedom to play, explore and be totally you 🌈'],
+  ] },
+];
+const quizEl = el('quiz'), qcard = el('qcard');
+let picks = [];
+function showQuestion(n) {
+  const Q = QUESTIONS[n];
+  qcard.innerHTML = `<div class="bear" aria-hidden="true">🧸</div>
+    <div class="count">Teddy asks · ${n + 1} of 3</div>
+    <h3></h3><div class="opts"></div>
+    <div class="dots" aria-hidden="true">${QUESTIONS.map((_, i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</div>`;
+  qcard.querySelector('h3').textContent = Q.q;
+  const box = qcard.querySelector('.opts');
+  Q.a.forEach((opt, i) => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.innerHTML = `<span class="e" aria-hidden="true">${opt[0]}</span>`; b.append(opt[1]);
+    b.addEventListener('click', () => {
+      picks[n] = opt[2];
+      if (ac && soundOn) bell([76, 79, 83][n] + 12, ac.currentTime, 0.12, 1.2);
+      qcard.style.animation = 'none'; void qcard.offsetWidth; qcard.style.animation = '';
+      n < 2 ? showQuestion(n + 1) : showWish();
+    });
+    box.append(b);
+  });
+  quizEl.hidden = false;
+  box.querySelector('button').focus({ preventScroll: true });
+}
+function showWish() {
+  qcard.innerHTML = `<div class="wish">
+    <div class="bear" aria-hidden="true">🧸✨</div>
+    <h2>Happy New Year</h2><div class="yr">2027</div>
+    <ul></ul>
+    <p class="sign">You deserve every good thing coming your way.<br>Stay cute, stay kind, stay happy. Love, Teddy 🧸💚</p>
+    <button type="button" id="closeWish">🎉 Yay! Thank you</button></div>`;
+  const ul = qcard.querySelector('ul');
+  picks.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.append(li); });
+  el('closeWish').addEventListener('click', () => { quizEl.hidden = true; });
+  el('closeWish').focus({ preventScroll: true });
+  fireworks(14);
+  chime();
+}
+function startQuiz() { picks = []; setTimeout(() => { if (finished) showQuestion(0); }, 1800); }
+
+// blocky fireworks over the castle
+const bursts = [];
+const fwGeo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+function burst() {
+  const col = new THREE.Color(pick([0xf2c14e, 0x9dffc8, 0xd9dde3, 0xff7aa8, 0x7ab8ff]));
+  const n = 60, mesh = new THREE.InstancedMesh(fwGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true }), n);
+  const o = new THREE.Vector3((Math.random() - .5) * 40, 28 + Math.random() * 12, -14 + (Math.random() - .5) * 10);
+  const v = [];
+  for (let i = 0; i < n; i++) v.push(new THREE.Vector3(Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize().multiplyScalar(6 + Math.random() * 4));
+  scene.add(mesh); bursts.push({ mesh, o, v, t: 0 });
+  if (ac && soundOn) bell(pick([88, 91, 95, 98]), ac.currentTime, 0.04, 0.9);
+}
+function fireworks(k) { for (let i = 0; i < k; i++) setTimeout(burst, i * 380 + Math.random() * 200); }
+function updateBursts(dt) {
+  for (let j = bursts.length - 1; j >= 0; j--) {
+    const b = bursts[j]; b.t += dt / 1000;
+    b.v.forEach((v, i) => {
+      tmpM.makeTranslation(b.o.x + v.x * b.t, b.o.y + v.y * b.t - 4 * b.t * b.t, b.o.z + v.z * b.t);
+      b.mesh.setMatrixAt(i, tmpM);
+    });
+    b.mesh.instanceMatrix.needsUpdate = true;
+    b.mesh.material.opacity = Math.max(0, 1 - b.t / 1.8);
+    if (b.t > 1.8) { scene.remove(b.mesh); b.mesh.material.dispose(); b.mesh.dispose(); bursts.splice(j, 1); }
+  }
+}
 
 /* ---------- loop ---------- */
 let last = performance.now(), finishT = 0, twinkleAcc = 0;
 function loop(now) {
   const dt = Math.min(50, now - last); last = now;
   if (building) updateBuild(dt);
+  if (bursts.length) updateBursts(dt);
   if (finished) {
     finishT += dt;
     candles.children.forEach((c, i) => {
